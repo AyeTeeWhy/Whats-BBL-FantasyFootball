@@ -307,6 +307,11 @@
     transition: border-color 0.15s ease;
   }
   .record-card:hover { border-color: rgba(203,161,53,0.4); }
+  .record-card-highlight {
+    border-color: var(--amber);
+    background: linear-gradient(160deg, var(--field-2), var(--field-3) 220%);
+  }
+  .record-card-highlight .rc-name { font-size: 26px; }
   .record-card::before {
     content: "";
     position: absolute; top: 0; left: 0; right: 0; height: 2px;
@@ -846,6 +851,19 @@ async function ensureAllSeasonsLoaded() {
   }
 }
 
+// Total seasons the league has existed, counting back to the
+// earliest tracked year. Every manager is treated as having been
+// around for all of them, even though full stats are only on record
+// from 2020 onward — the current season is excluded until Sleeper
+// marks the league complete, so this doesn't tick up until the
+// season actually finishes.
+function computeLeagueTenure() {
+  const sleeperEntries = state.seasons.filter(s => s.source === "sleeper");
+  const latest = sleeperEntries[sleeperEntries.length - 1];
+  const currentInProgress = latest && latest.leagueMeta && latest.leagueMeta.status && latest.leagueMeta.status !== "complete";
+  return state.seasons.length - (currentInProgress ? 1 : 0);
+}
+
 function buildAllTimeRecordTable() {
   const records = {};
   Object.entries(CAREER_RECORD_2020_2025).forEach(([owner, r]) => {
@@ -949,18 +967,70 @@ function renderHistoryView() {
     const titleMap = {}; champs.forEach(c => titleMap[c.owner] = c.titles.length);
 
     const allOwners = new Set([...records.map(r => r.owner), ...scoring.map(s => s.owner)]);
+    const leagueTenure = computeLeagueTenure();
     const careerStats = Array.from(allOwners).map(owner => {
       const r = recordMap[owner] || { wins: 0, losses: 0, ties: 0, winPct: 0 };
       const s = scoringMap[owner] || { seasons: 0, avgFor: null, avgAgainst: null, avgDiff: null };
       const f = finishMap[owner] || { avg: null, best: null, worst: null };
       return {
         owner, wins: r.wins, losses: r.losses, ties: r.ties, winPct: r.winPct,
-        seasons: s.seasons, avgFor: s.avgFor, avgAgainst: s.avgAgainst, avgDiff: s.avgDiff,
+        seasons: leagueTenure, avgFor: s.avgFor, avgAgainst: s.avgAgainst, avgDiff: s.avgDiff,
         avgFinish: f.avg, bestFinish: f.best, worstFinish: f.worst, titles: titleMap[owner] || 0
       };
     });
 
-    // ---- Fun record cards ----
+    // ---- Total career points scored (sum, not average) ----
+    const totalPointsMap = {};
+    careers.forEach(c => {
+      totalPointsMap[c.owner] = c.seasons
+        .filter(s => s.pointsFor != null)
+        .reduce((sum, s) => sum + s.pointsFor, 0);
+    });
+
+    // ---- All-Time Power Rankings ----
+    // Blends career win %, championships, average finish, total points
+    // scored, and point differential into a single 0-100 score. Each
+    // factor is min-max normalized across the league first, so no
+    // single stat's raw scale (e.g. points in the thousands vs a
+    // 0-2 title count) can dominate just because its numbers are bigger.
+    const POWER_WEIGHTS = { winPct: 0.25, titles: 0.25, avgFinish: 0.25, totalPoints: 0.15, avgDiff: 0.10 };
+    const normalize = (value, min, max, invert) => {
+      if (max === min) return 100;
+      let n = (value - min) / (max - min) * 100;
+      return invert ? 100 - n : n;
+    };
+    const rangeOf = arr => ({ min: Math.min(...arr), max: Math.max(...arr) });
+
+    const powerInputs = careerStats.map(r => ({
+      owner: r.owner,
+      winPct: r.winPct,
+      titles: r.titles,
+      avgFinish: r.avgFinish,
+      totalPoints: totalPointsMap[r.owner] || 0,
+      avgDiff: r.avgDiff != null ? r.avgDiff : 0
+    }));
+    const wpRange = rangeOf(powerInputs.map(p => p.winPct));
+    const titleRange = rangeOf(powerInputs.map(p => p.titles));
+    const finishRange = rangeOf(powerInputs.map(p => p.avgFinish != null ? p.avgFinish : 0));
+    const ptsRange = rangeOf(powerInputs.map(p => p.totalPoints));
+    const diffRange = rangeOf(powerInputs.map(p => p.avgDiff));
+
+    const powerRankings = powerInputs.map(p => {
+      const winPctScore = normalize(p.winPct, wpRange.min, wpRange.max);
+      const titlesScore = normalize(p.titles, titleRange.min, titleRange.max);
+      const finishScore = p.avgFinish != null ? normalize(p.avgFinish, finishRange.min, finishRange.max, true) : 0;
+      const pointsScore = normalize(p.totalPoints, ptsRange.min, ptsRange.max);
+      const diffScore = normalize(p.avgDiff, diffRange.min, diffRange.max);
+      const powerScore =
+        winPctScore * POWER_WEIGHTS.winPct +
+        titlesScore * POWER_WEIGHTS.titles +
+        finishScore * POWER_WEIGHTS.avgFinish +
+        pointsScore * POWER_WEIGHTS.totalPoints +
+        diffScore * POWER_WEIGHTS.avgDiff;
+      return { ...p, powerScore };
+    }).sort((a, b) => b.powerScore - a.powerScore);
+
+
     let bestSingleSeason = null, worstSingleSeasonAgainst = null;
     careers.forEach(c => c.seasons.forEach(s => {
       if (s.pointsFor != null && (!bestSingleSeason || s.pointsFor > bestSingleSeason.pointsFor)) {
@@ -983,7 +1053,10 @@ function renderHistoryView() {
     const mostPointsAgainstCareer = byAvgAgainst[0];
     const bestWinPct = records[0];
 
+    const goat = powerRankings[0];
+
     const cards = [
+      goat && { label: "\uD83D\uDC51 All-Time Power Ranking #1", name: goat.owner, detail: `Power Score: ${goat.powerScore.toFixed(1)} / 100`, highlight: true },
       mostTitlesCard,
       bestWinPct && { label: "Best All-Time Win %", name: bestWinPct.owner, detail: `${bestWinPct.wins}-${bestWinPct.losses}${bestWinPct.ties ? "-" + bestWinPct.ties : ""} (${(bestWinPct.winPct*100).toFixed(1)}%)` },
       bestSingleSeason && { label: "Highest Single-Season Points", name: bestSingleSeason.owner, detail: `${bestSingleSeason.pointsFor.toFixed(1)} pts in ${bestSingleSeason.season}` },
@@ -994,7 +1067,7 @@ function renderHistoryView() {
     ].filter(Boolean);
 
     const cardsHTML = cards.map(c => `
-      <div class="record-card">
+      <div class="record-card${c.highlight ? " record-card-highlight" : ""}">
         <div class="rc-label">${escapeHTML(c.label)}</div>
         <div class="rc-name">${escapeHTML(c.name)}</div>
         <div class="rc-detail">${escapeHTML(c.detail)}</div>
@@ -1002,6 +1075,12 @@ function renderHistoryView() {
 
     document.getElementById("historyContent").innerHTML = `
       <div class="record-grid">${cardsHTML}</div>
+
+      <div class="hist-section">
+        <h2 class="hist-section-head">All-Time Power Rankings</h2>
+        <p class="hist-section-sub">One score (0&ndash;100) blending career win % (25%), championships (25%), average finish (25%), total points scored (15%), and point differential (10%). Each factor is scaled against the rest of the league first, so titles carry as much weight as their share says, not just whichever number happens to be bigger.</p>
+        <div class="table-scroll" id="powerRankTable"></div>
+      </div>
 
       <div class="hist-section">
         <h2 class="hist-section-head">Career Stats</h2>
@@ -1015,6 +1094,32 @@ function renderHistoryView() {
         <div class="table-scroll" id="championshipsTable"></div>
       </div>
     `;
+
+    paintSortableTable(
+      document.getElementById("powerRankTable"),
+      [
+        { key: "owner", label: "Owner" },
+        { key: "powerScore", label: "Power Score", numeric: true },
+        { key: "winPct", label: "Win %", numeric: true },
+        { key: "titles", label: "\uD83C\uDFC6", numeric: true },
+        { key: "avgFinish", label: "Avg Finish", numeric: true },
+        { key: "totalPoints", label: "Total Pts", numeric: true },
+        { key: "avgDiff", label: "Avg Diff", numeric: true }
+      ],
+      powerRankings,
+      (p, i) => `
+        <tr>
+          <td class="rank">${i === 0 ? "\uD83D\uDC51" : i + 1}</td>
+          <td class="team-name">${escapeHTML(p.owner)}</td>
+          <td class="num" style="color: var(--amber); font-family: 'IBM Plex Mono', monospace;">${p.powerScore.toFixed(1)}</td>
+          <td class="num">${(p.winPct * 100).toFixed(1)}%</td>
+          <td class="num">${p.titles ? `\uD83C\uDFC6&times;${p.titles}` : "\u2014"}</td>
+          <td class="num">${p.avgFinish != null ? p.avgFinish.toFixed(2) : "\u2014"}</td>
+          <td class="num">${p.totalPoints.toFixed(0)}</td>
+          <td class="num ${p.avgDiff >= 0 ? "record-w" : "record-l"}">${p.avgDiff >= 0 ? "+" : ""}${p.avgDiff.toFixed(1)}</td>
+        </tr>`,
+      "powerScore", "desc"
+    );
 
     paintSortableTable(
       document.getElementById("careerStatsTable"),
