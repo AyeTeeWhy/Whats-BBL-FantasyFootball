@@ -303,10 +303,56 @@ const CONFIG = {
    placeholder for any season with no entry here and no Sleeper data.
    ========================================================= */
 const HISTORICAL_DATA = {
-  // 2021: { teams: [] },
-  // 2020: { teams: [] },
-  // 2019: { teams: [] },
-  // 2018: { teams: [] },
+  // Champion-only years — regular-season records/points weren't kept
+  // in a form we could recover for these two seasons.
+  2018: { champion: "Morgan" },
+  2019: { champion: "Adam" },
+
+  // Full regular-season rank + points for/against, pulled from the
+  // league spreadsheet. Wins/losses per individual season weren't
+  // tracked separately from the all-time cumulative total, so no
+  // per-season record is shown for these two years.
+  2020: {
+    champion: "Daniel",
+    teams: [
+      { owner: "Daniel", rank: 1,  pointsFor: 1705.1, pointsAgainst: 1439.5 },
+      { owner: "Joey",   rank: 2,  pointsFor: 1568.2, pointsAgainst: 1590.4 },
+      { owner: "Morgan", rank: 3,  pointsFor: 1513.8, pointsAgainst: 1530.4 },
+      { owner: "Kurt",   rank: 4,  pointsFor: 1381.9, pointsAgainst: 1541.3 },
+      { owner: "Austin", rank: 5,  pointsFor: 1663.4, pointsAgainst: 1492.2 },
+      { owner: "JR",     rank: 6,  pointsFor: 1497.0, pointsAgainst: 1584.7 },
+      { owner: "Logan",  rank: 7,  pointsFor: 1517.1, pointsAgainst: 1576.9 },
+      { owner: "Tyler",  rank: 8,  pointsFor: 1465.6, pointsAgainst: 1464.0 },
+      { owner: "Adam",   rank: 9,  pointsFor: 1753.4, pointsAgainst: 1718.6 },
+      { owner: "Tim",    rank: 10, pointsFor: 1589.9, pointsAgainst: 1548.2 },
+      { owner: "Dylan",  rank: 11, pointsFor: 1392.9, pointsAgainst: 1538.1 },
+      { owner: "Justin", rank: 12, pointsFor: 1479.6, pointsAgainst: 1503.6 }
+    ]
+  },
+  2021: {
+    champion: "Morgan",
+    teams: [
+      { owner: "Joey",   rank: 1,  pointsFor: 1488.6, pointsAgainst: 1635.4 },
+      { owner: "Tyler",  rank: 2,  pointsFor: 1369.2, pointsAgainst: 1690.5 },
+      { owner: "Morgan", rank: 3,  pointsFor: 1854.2, pointsAgainst: 1629.5 },
+      { owner: "Kurt",   rank: 4,  pointsFor: 1587.4, pointsAgainst: 1618.5 },
+      { owner: "Adam",   rank: 5,  pointsFor: 1937.3, pointsAgainst: 1637.5 },
+      { owner: "Austin", rank: 6,  pointsFor: 1613.9, pointsAgainst: 1574.4 },
+      { owner: "Justin", rank: 7,  pointsFor: 1706.6, pointsAgainst: 1530.7 },
+      { owner: "Tim",    rank: 8,  pointsFor: 1649.8, pointsAgainst: 1752.1 },
+      { owner: "Daniel", rank: 9,  pointsFor: 1641.0, pointsAgainst: 1728.9 },
+      { owner: "JR",     rank: 10, pointsFor: 1703.2, pointsAgainst: 1660.0 },
+      { owner: "Dylan",  rank: 11, pointsFor: 1497.9, pointsAgainst: 1625.1 },
+      { owner: "Logan",  rank: 12, pointsFor: 1547.9, pointsAgainst: 1514.4 }
+    ]
+  }
+};
+
+// Champions by year, where known, shown as a badge on that season's
+// panel regardless of whether full standings are available.
+const CHAMPIONS = {
+  2018: "Morgan", 2019: "Adam", 2020: "Daniel", 2021: "Morgan",
+  2022: "Tim", 2023: "Logan", 2024: "Daniel", 2025: "Tim"
 };
 
 const API = "https://api.sleeper.app/v1";
@@ -390,9 +436,10 @@ async function computeSleeperStandings(entry) {
 
 function getHistoricalStandings(season) {
   const data = HISTORICAL_DATA[season];
-  if (!data) return null;
+  if (!data || !data.teams) return null;
   const teams = data.teams.slice().sort((a, b) => {
-    if (b.wins !== a.wins) return b.wins - a.wins;
+    if (a.rank != null && b.rank != null) return a.rank - b.rank;
+    if (b.wins !== a.wins) return (b.wins || 0) - (a.wins || 0);
     return (b.pointsFor || 0) - (a.pointsFor || 0);
   });
   return teams;
@@ -414,22 +461,24 @@ function renderSeasonNav() {
 }
 
 function renderPlaceholder(season) {
+  const champ = CHAMPIONS[season];
   document.getElementById("content").innerHTML = `
     <div class="placeholder-box">
-      <strong>${season} data not loaded yet</strong>
-      This season predates the Sleeper league. Once the ${season} spreadsheet is added
-      to the HISTORICAL_DATA object in this page, standings will show here automatically.
+      ${champ ? `<strong>${season} Champion: ${escapeHTML(champ)}</strong>Full standings, records, and points for that season weren\u2019t kept in a form we could recover \u2014 only the champion is on record.` :
+      `<strong>${season} data not loaded yet</strong>This season predates the Sleeper league. Once the ${season} spreadsheet is added to the HISTORICAL_DATA object in this page, standings will show here automatically.`}
     </div>`;
 }
 
 function renderStandings(season, teams, source) {
   document.getElementById("panelTitle").textContent = `${season} Standings`;
-  document.getElementById("panelNote").textContent = source === "sleeper" ? "Live from Sleeper" : "Historical record";
+  document.getElementById("panelNote").textContent = (source === "sleeper" ? "Live from Sleeper" : "Historical record") + (CHAMPIONS[season] ? ` \u00b7 \uD83C\uDFC6 Champion: ${CHAMPIONS[season]}` : "");
 
   if (!teams || !teams.length) {
     renderPlaceholder(season);
     return;
   }
+
+  const hasRecord = teams[0].wins !== undefined;
 
   let rows = teams.map((t, i) => {
     const diff = (t.pointsFor - t.pointsAgainst);
@@ -438,9 +487,9 @@ function renderStandings(season, teams, source) {
     return `
       <tr>
         <td class="rank">${i + 1}</td>
-        <td class="team-name">${escapeHTML(t.teamName)}</td>
+        <td class="team-name">${escapeHTML(t.teamName || t.owner)}</td>
         <td class="owner">${escapeHTML(t.owner)}</td>
-        <td class="num"><span class="record-w">${t.wins}</span>-<span class="record-l">${t.losses}</span>${t.ties ? "-" + t.ties : ""}</td>
+        ${hasRecord ? `<td class="num"><span class="record-w">${t.wins}</span>-<span class="record-l">${t.losses}</span>${t.ties ? "-" + t.ties : ""}</td>` : ""}
         <td class="num">${t.pointsFor.toFixed(1)}</td>
         <td class="num">${t.pointsAgainst.toFixed(1)}</td>
         <td class="num ${diffClass}">${diffStr}</td>
@@ -454,7 +503,7 @@ function renderStandings(season, teams, source) {
           <th></th>
           <th>Team</th>
           <th>Owner</th>
-          <th class="num">Record</th>
+          ${hasRecord ? `<th class="num">Record</th>` : ""}
           <th class="num">Pts For</th>
           <th class="num">Pts Against</th>
           <th class="num">Diff</th>
