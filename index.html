@@ -563,6 +563,28 @@ async function buildSeasonChain() {
   return chain;
 }
 
+// Maps Sleeper display names/usernames to the real names used in
+// league history (spreadsheet + champions), so career stats combine
+// correctly across both data sources instead of treating someone's
+// Sleeper handle as a separate person.
+const OWNER_ALIASES = {
+  "gstv": "Joey",
+  "Pacfan8725": "Morgan",
+  "djarboe": "Daniel",
+  "Jlanham0029": "JR",
+  "AyeTeeWhy": "Adam",
+  "austinmc20": "Austin",
+  "timothydawson": "Tim",
+  "wetdirt99": "Tyler",
+  "lmatt10": "Logan",
+  "FantasyCK": "Kurt",
+  "Justind82": "Justin",
+  "TopGunHatch": "Dylan"
+};
+function canonicalOwner(name) {
+  return OWNER_ALIASES[name] || name;
+}
+
 async function computeSleeperStandings(entry) {
   const { leagueId } = entry;
   const [users, rosters] = await Promise.all([
@@ -577,7 +599,7 @@ async function computeSleeperStandings(entry) {
     const teamName = (u.metadata && u.metadata.team_name) || u.display_name || "Unknown Team";
     const s = r.settings || {};
     return {
-      owner: u.display_name || "Unknown",
+      owner: canonicalOwner(u.display_name || "Unknown"),
       teamName,
       wins: s.wins || 0,
       losses: s.losses || 0,
