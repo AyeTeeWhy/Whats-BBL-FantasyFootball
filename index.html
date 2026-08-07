@@ -5,20 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>League Standings</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --field: #14261B;
-    --field-2: #1D3B28;
-    --field-3: #234832;
-    --chalk: #F3EFE2;
-    --chalk-dim: #C9C4B2;
-    --amber: #E8A33D;
-    --amber-dim: #B87F2C;
-    --turf-line: rgba(243,239,226,0.14);
-    --loss-red: #C1443B;
-    --win-green: #6FA96B;
-    --ink: #14201A;
+    --field: #17151E;
+    --field-2: #221E2C;
+    --field-3: #3D2E5C;
+    --chalk: #EFEAF7;
+    --chalk-dim: #9A91B0;
+    --amber: #CBA135;
+    --amber-dim: #8F7326;
+    --turf-line: rgba(239,234,247,0.12);
+    --loss-red: #C1667A;
+    --win-green: #7CB88F;
+    --ink: #16121C;
     --radius: 6px;
   }
 
@@ -30,7 +30,7 @@
     background-image:
       repeating-linear-gradient(180deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 64px);
     color: var(--chalk);
-    font-family: 'Inter', sans-serif;
+    font-family: 'Manrope', sans-serif;
     -webkit-font-smoothing: antialiased;
   }
 
@@ -47,11 +47,13 @@
     content: "";
     position: absolute;
     inset: 0;
-    background: radial-gradient(ellipse at 20% 0%, rgba(232,163,61,0.10), transparent 55%);
+    background:
+      radial-gradient(ellipse at 15% -10%, rgba(203,161,53,0.14), transparent 50%),
+      radial-gradient(ellipse at 85% 10%, rgba(124,90,196,0.16), transparent 55%);
     pointer-events: none;
   }
   .eyebrow {
-    font-family: 'Space Mono', monospace;
+    font-family: 'IBM Plex Mono', monospace;
     font-size: 12px;
     letter-spacing: 0.18em;
     text-transform: uppercase;
@@ -59,8 +61,7 @@
     margin: 0 0 10px;
   }
   h1.league-name {
-    font-family: 'Anton', sans-serif;
-    font-weight: 400;
+    font-family: 'Big Shoulders Display', sans-serif; font-weight: 800;
     font-size: clamp(38px, 6vw, 64px);
     line-height: 0.95;
     letter-spacing: 0.01em;
@@ -68,7 +69,7 @@
     text-transform: uppercase;
   }
   .league-sub {
-    font-family: 'Space Mono', monospace;
+    font-family: 'IBM Plex Mono', monospace;
     color: var(--chalk-dim);
     font-size: 13px;
   }
@@ -88,7 +89,7 @@
   }
   .sb-cell:last-child { border-right: none; }
   .sb-label {
-    font-family: 'Space Mono', monospace;
+    font-family: 'IBM Plex Mono', monospace;
     font-size: 10px;
     letter-spacing: 0.14em;
     text-transform: uppercase;
@@ -96,13 +97,13 @@
     margin-bottom: 6px;
   }
   .sb-value {
-    font-family: 'Anton', sans-serif;
+    font-family: 'Big Shoulders Display', sans-serif; font-weight: 800;
     font-size: 22px;
     color: var(--amber);
     text-transform: uppercase;
     line-height: 1.1;
   }
-  .sb-value small { font-family: 'Space Mono', monospace; font-size: 12px; color: var(--chalk-dim); }
+  .sb-value small { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--chalk-dim); }
 
   /* ---------- YARD-LINE SEASON NAV ---------- */
   nav.yardline {
@@ -127,7 +128,7 @@
     background: none;
     border: none;
     color: var(--chalk-dim);
-    font-family: 'Space Mono', monospace;
+    font-family: 'IBM Plex Mono', monospace;
     font-size: 13px;
     position: relative;
     transition: color 0.15s ease;
@@ -161,15 +162,14 @@
     gap: 8px;
   }
   h2.panel-title {
-    font-family: 'Anton', sans-serif;
-    font-weight: 400;
+    font-family: 'Big Shoulders Display', sans-serif; font-weight: 800;
     text-transform: uppercase;
     font-size: 24px;
     letter-spacing: 0.02em;
     margin: 0;
     color: var(--chalk);
   }
-  .panel-note { font-family: 'Space Mono', monospace; font-size: 12px; color: var(--chalk-dim); }
+  .panel-note { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--chalk-dim); }
 
   table.standings {
     width: 100%;
@@ -178,7 +178,7 @@
   }
   table.standings thead th {
     text-align: left;
-    font-family: 'Space Mono', monospace;
+    font-family: 'IBM Plex Mono', monospace;
     font-size: 10.5px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -200,13 +200,13 @@
     border-bottom: 1px solid rgba(243,239,226,0.06);
   }
   table.standings tbody tr:nth-child(odd) { background: rgba(255,255,255,0.015); }
-  table.standings tbody tr:hover { background: rgba(232,163,61,0.06); }
+  table.standings tbody tr:hover { background: rgba(203,161,53,0.08); }
   table.standings td {
     padding: 12px 14px;
     vertical-align: middle;
   }
   td.rank {
-    font-family: 'Anton', sans-serif;
+    font-family: 'Big Shoulders Display', sans-serif; font-weight: 800;
     color: var(--amber-dim);
     font-size: 16px;
     width: 34px;
@@ -214,12 +214,12 @@
   tr:first-child td.rank { color: var(--amber); }
   td.team-name { font-weight: 600; }
   td.owner { color: var(--chalk-dim); font-size: 12.5px; }
-  td.num { font-family: 'Space Mono', monospace; }
+  td.num { font-family: 'IBM Plex Mono', monospace; }
   .record-w { color: var(--win-green); }
   .record-l { color: var(--loss-red); }
   .streak-badge {
     display: inline-block;
-    font-family: 'Space Mono', monospace;
+    font-family: 'IBM Plex Mono', monospace;
     font-size: 11px;
     padding: 2px 7px;
     border-radius: 3px;
@@ -232,18 +232,18 @@
     padding: 40px 24px;
     text-align: center;
     color: var(--chalk-dim);
-    font-family: 'Space Mono', monospace;
+    font-family: 'IBM Plex Mono', monospace;
     font-size: 13px;
     line-height: 1.7;
   }
-  .placeholder-box strong { color: var(--amber); display: block; font-family: 'Anton', sans-serif; font-size: 18px; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.02em;}
+  .placeholder-box strong { color: var(--amber); display: block; font-family: 'Big Shoulders Display', sans-serif; font-weight: 800; font-size: 18px; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.02em;}
 
-  .loading-row { color: var(--chalk-dim); font-family: 'Space Mono', monospace; font-size: 13px; padding: 24px 0; }
+  .loading-row { color: var(--chalk-dim); font-family: 'IBM Plex Mono', monospace; font-size: 13px; padding: 24px 0; }
 
   footer {
     border-top: 1px solid var(--turf-line);
     padding: 20px 0 40px;
-    font-family: 'Space Mono', monospace;
+    font-family: 'IBM Plex Mono', monospace;
     font-size: 11px;
     color: var(--chalk-dim);
     text-align: center;
@@ -258,7 +258,7 @@
     overflow: hidden;
   }
   .toggle-btn {
-    font-family: 'Space Mono', monospace;
+    font-family: 'IBM Plex Mono', monospace;
     font-size: 12px;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -277,7 +277,7 @@
   #historyView { padding: 36px 0 80px; }
   .hist-section { margin-bottom: 44px; }
   .hist-section-head {
-    font-family: 'Anton', sans-serif;
+    font-family: 'Big Shoulders Display', sans-serif; font-weight: 800;
     text-transform: uppercase;
     font-size: 20px;
     letter-spacing: 0.02em;
@@ -285,7 +285,7 @@
     margin: 0 0 4px;
   }
   .hist-section-sub {
-    font-family: 'Space Mono', monospace;
+    font-family: 'IBM Plex Mono', monospace;
     font-size: 12px;
     color: var(--chalk-dim);
     margin: 0 0 14px;
@@ -304,14 +304,16 @@
     padding: 16px 18px;
     position: relative;
     overflow: hidden;
+    transition: border-color 0.15s ease;
   }
+  .record-card:hover { border-color: rgba(203,161,53,0.4); }
   .record-card::before {
     content: "";
     position: absolute; top: 0; left: 0; right: 0; height: 2px;
-    background: var(--amber);
+    background: linear-gradient(90deg, var(--amber), var(--field-3) 130%);
   }
   .record-card .rc-label {
-    font-family: 'Space Mono', monospace;
+    font-family: 'IBM Plex Mono', monospace;
     font-size: 10.5px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -319,14 +321,14 @@
     margin-bottom: 8px;
   }
   .record-card .rc-name {
-    font-family: 'Anton', sans-serif;
+    font-family: 'Big Shoulders Display', sans-serif; font-weight: 800;
     font-size: 22px;
     text-transform: uppercase;
     color: var(--amber);
     line-height: 1.15;
   }
   .record-card .rc-detail {
-    font-family: 'Space Mono', monospace;
+    font-family: 'IBM Plex Mono', monospace;
     font-size: 12px;
     color: var(--chalk-dim);
     margin-top: 4px;
@@ -339,7 +341,7 @@
   }
   table.hist-table thead th {
     text-align: left;
-    font-family: 'Space Mono', monospace;
+    font-family: 'IBM Plex Mono', monospace;
     font-size: 10.5px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -351,11 +353,11 @@
   table.hist-table thead th.num, table.hist-table td.num { text-align: right; }
   table.hist-table tbody tr { border-bottom: 1px solid rgba(243,239,226,0.06); }
   table.hist-table tbody tr:nth-child(odd) { background: rgba(255,255,255,0.015); }
-  table.hist-table tbody tr:hover { background: rgba(232,163,61,0.06); }
+  table.hist-table tbody tr:hover { background: rgba(203,161,53,0.08); }
   table.hist-table td { padding: 10px 12px; vertical-align: middle; }
-  table.hist-table td.num { font-family: 'Space Mono', monospace; }
+  table.hist-table td.num { font-family: 'IBM Plex Mono', monospace; }
   table.hist-table td.rank {
-    font-family: 'Anton', sans-serif;
+    font-family: 'Big Shoulders Display', sans-serif; font-weight: 800;
     color: var(--amber-dim);
     font-size: 15px;
     width: 30px;
@@ -363,11 +365,11 @@
   table.hist-table tr:first-child td.rank { color: var(--amber); }
   .trophy-count {
     display: inline-block;
-    font-family: 'Space Mono', monospace;
+    font-family: 'IBM Plex Mono', monospace;
     font-size: 12px;
     color: var(--amber);
   }
-  .years-list { color: var(--chalk-dim); font-size: 12px; font-family: 'Space Mono', monospace; }
+  .years-list { color: var(--chalk-dim); font-size: 12px; font-family: 'IBM Plex Mono', monospace; }
   .table-scroll { width: 100%; overflow-x: auto; }
 
   @media (max-width: 640px) {
@@ -895,9 +897,19 @@ function buildCareerAggregates() {
     }
   });
 
+  // Championship-only years (no team-level rank/points data, e.g.
+  // 2018-2019) still count as a 1st-place finish for whoever won it —
+  // otherwise winning it all in a year we have no team data for
+  // wouldn't show up in that person's best/worst finish at all.
   Object.keys(CHAMPIONS).forEach(yr => {
+    const year = parseInt(yr, 10);
     const owner = CHAMPIONS[yr];
-    ensure(owner).titles.push(parseInt(yr, 10));
+    const rec = ensure(owner);
+    rec.titles.push(year);
+    const alreadyTracked = rec.seasons.some(s => s.season === year);
+    if (!alreadyTracked) {
+      rec.seasons.push({ season: year, rank: 1, pointsFor: null, pointsAgainst: null });
+    }
   });
 
   return Object.values(byOwner);
@@ -913,12 +925,13 @@ function renderHistoryView() {
       .filter(c => c.titles.length)
       .sort((a, b) => b.titles.length - a.titles.length || Math.min(...a.titles) - Math.min(...b.titles));
 
-    // ---- Career scoring (need >=1 season with points data) ----
-    const scoring = careers.filter(c => c.seasons.length).map(c => {
-      const n = c.seasons.length;
-      const avgFor = c.seasons.reduce((s, x) => s + (x.pointsFor || 0), 0) / n;
-      const avgAgainst = c.seasons.reduce((s, x) => s + (x.pointsAgainst || 0), 0) / n;
-      return { owner: c.owner, seasons: n, avgFor, avgAgainst, avgDiff: avgFor - avgAgainst };
+    // ---- Career scoring (only average over seasons with real points data) ----
+    const scoring = careers.filter(c => c.seasons.some(s => s.pointsFor != null)).map(c => {
+      const withPts = c.seasons.filter(s => s.pointsFor != null);
+      const n = withPts.length;
+      const avgFor = withPts.reduce((s, x) => s + x.pointsFor, 0) / n;
+      const avgAgainst = withPts.reduce((s, x) => s + x.pointsAgainst, 0) / n;
+      return { owner: c.owner, seasons: c.seasons.length, avgFor, avgAgainst, avgDiff: avgFor - avgAgainst };
     });
     const byAvgAgainst = scoring.slice().sort((a, b) => b.avgAgainst - a.avgAgainst);
 
@@ -958,14 +971,20 @@ function renderHistoryView() {
       }
     }));
 
-    const mostTitles = champs[0];
+    const maxTitleCount = champs.length ? champs[0].titles.length : 0;
+    const coChamps = champs.filter(c => c.titles.length === maxTitleCount);
+    const mostTitlesCard = coChamps.length ? {
+      label: "Most Championships",
+      name: coChamps.map(c => c.owner).join(", "),
+      detail: `${maxTitleCount} title${maxTitleCount !== 1 ? "s" : ""} each`
+    } : null;
     const bestAvgFinish = finish[0];
     const worstAvgFinish = finish[finish.length - 1];
     const mostPointsAgainstCareer = byAvgAgainst[0];
     const bestWinPct = records[0];
 
     const cards = [
-      mostTitles && { label: "Most Championships", name: mostTitles.owner, detail: `${mostTitles.titles.length} title${mostTitles.titles.length !== 1 ? "s" : ""} (${mostTitles.titles.slice().sort((a,b)=>a-b).join(", ")})` },
+      mostTitlesCard,
       bestWinPct && { label: "Best All-Time Win %", name: bestWinPct.owner, detail: `${bestWinPct.wins}-${bestWinPct.losses}${bestWinPct.ties ? "-" + bestWinPct.ties : ""} (${(bestWinPct.winPct*100).toFixed(1)}%)` },
       bestSingleSeason && { label: "Highest Single-Season Points", name: bestSingleSeason.owner, detail: `${bestSingleSeason.pointsFor.toFixed(1)} pts in ${bestSingleSeason.season}` },
       worstSingleSeasonAgainst && { label: "Most Points Given Up, One Season", name: worstSingleSeasonAgainst.owner, detail: `${worstSingleSeasonAgainst.pointsAgainst.toFixed(1)} pts in ${worstSingleSeasonAgainst.season}` },
