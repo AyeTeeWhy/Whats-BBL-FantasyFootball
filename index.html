@@ -188,6 +188,14 @@
     font-weight: 400;
   }
   table.standings thead th.num, table.standings td.num { text-align: right; }
+  th.sortable {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  th.sortable:hover { color: var(--chalk); }
+  th.sortable.active-sort { color: var(--amber); }
+  .sort-arrow { font-size: 8px; margin-left: 3px; display: inline-block; }
   table.standings tbody tr {
     border-bottom: 1px solid rgba(243,239,226,0.06);
   }
@@ -241,7 +249,129 @@
     text-align: center;
   }
 
+  /* ---------- VIEW TOGGLE ---------- */
+  .view-toggle {
+    display: inline-flex;
+    margin-top: 30px;
+    border: 1px solid var(--turf-line);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .toggle-btn {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    background: transparent;
+    color: var(--chalk-dim);
+    border: none;
+    padding: 10px 18px;
+    cursor: pointer;
+    border-right: 1px solid var(--turf-line);
+  }
+  .toggle-btn:last-child { border-right: none; }
+  .toggle-btn.active { background: var(--amber); color: var(--ink); font-weight: 700; }
+  .toggle-btn:hover:not(.active) { color: var(--chalk); }
+
+  /* ---------- HISTORICAL STATS ---------- */
+  #historyView { padding: 36px 0 80px; }
+  .hist-section { margin-bottom: 44px; }
+  .hist-section-head {
+    font-family: 'Anton', sans-serif;
+    text-transform: uppercase;
+    font-size: 20px;
+    letter-spacing: 0.02em;
+    color: var(--chalk);
+    margin: 0 0 4px;
+  }
+  .hist-section-sub {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    color: var(--chalk-dim);
+    margin: 0 0 14px;
+  }
+
+  .record-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    margin-bottom: 44px;
+  }
+  .record-card {
+    border: 1px solid var(--turf-line);
+    border-radius: var(--radius);
+    background: var(--field-2);
+    padding: 16px 18px;
+    position: relative;
+    overflow: hidden;
+  }
+  .record-card::before {
+    content: "";
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: var(--amber);
+  }
+  .record-card .rc-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--chalk-dim);
+    margin-bottom: 8px;
+  }
+  .record-card .rc-name {
+    font-family: 'Anton', sans-serif;
+    font-size: 22px;
+    text-transform: uppercase;
+    color: var(--amber);
+    line-height: 1.15;
+  }
+  .record-card .rc-detail {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    color: var(--chalk-dim);
+    margin-top: 4px;
+  }
+
+  table.hist-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+  }
+  table.hist-table thead th {
+    text-align: left;
+    font-family: 'Space Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--chalk-dim);
+    padding: 0 12px 10px;
+    border-bottom: 1px solid var(--turf-line);
+    font-weight: 400;
+  }
+  table.hist-table thead th.num, table.hist-table td.num { text-align: right; }
+  table.hist-table tbody tr { border-bottom: 1px solid rgba(243,239,226,0.06); }
+  table.hist-table tbody tr:nth-child(odd) { background: rgba(255,255,255,0.015); }
+  table.hist-table tbody tr:hover { background: rgba(232,163,61,0.06); }
+  table.hist-table td { padding: 10px 12px; vertical-align: middle; }
+  table.hist-table td.num { font-family: 'Space Mono', monospace; }
+  table.hist-table td.rank {
+    font-family: 'Anton', sans-serif;
+    color: var(--amber-dim);
+    font-size: 15px;
+    width: 30px;
+  }
+  table.hist-table tr:first-child td.rank { color: var(--amber); }
+  .trophy-count {
+    display: inline-block;
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    color: var(--amber);
+  }
+  .years-list { color: var(--chalk-dim); font-size: 12px; font-family: 'Space Mono', monospace; }
+  .table-scroll { width: 100%; overflow-x: auto; }
+
   @media (max-width: 640px) {
+
     .scoreboard-strip { grid-template-columns: repeat(2, 1fr); }
     table.standings { font-size: 12.5px; }
     td.owner { display: none; }
@@ -264,17 +394,28 @@
     </div>
   </header>
 
-  <nav class="yardline">
-    <div class="yardline-track" id="seasonTrack"></div>
-  </nav>
+  <div class="view-toggle" id="viewToggle">
+    <button class="toggle-btn active" data-view="season">Season Standings</button>
+    <button class="toggle-btn" data-view="history">Historical Stats</button>
+  </div>
 
-  <main>
-    <div class="panel-head">
-      <h2 class="panel-title" id="panelTitle">Standings</h2>
-      <span class="panel-note" id="panelNote"></span>
-    </div>
-    <div id="content"><div class="loading-row">Fetching standings&hellip;</div></div>
-  </main>
+  <div id="seasonView">
+    <nav class="yardline">
+      <div class="yardline-track" id="seasonTrack"></div>
+    </nav>
+
+    <main>
+      <div class="panel-head">
+        <h2 class="panel-title" id="panelTitle">Standings</h2>
+        <span class="panel-note" id="panelNote"></span>
+      </div>
+      <div id="content"><div class="loading-row">Fetching standings&hellip;</div></div>
+    </main>
+  </div>
+
+  <div id="historyView" style="display:none;">
+    <div id="historyContent"><div class="loading-row">Crunching every season&hellip;</div></div>
+  </div>
 
   <footer>
     Data via the Sleeper API &middot; auto-refreshes on page load &middot; built for the league
@@ -353,6 +494,27 @@ const HISTORICAL_DATA = {
 const CHAMPIONS = {
   2018: "Morgan", 2019: "Adam", 2020: "Daniel", 2021: "Morgan",
   2022: "Tim", 2023: "Logan", 2024: "Daniel", 2025: "Tim"
+};
+
+// Cumulative career record for 2020-2025, straight from the league
+// spreadsheet's win/loss table. These six seasons overlap with what
+// Sleeper can also compute (2022-2025), so this is used as the
+// source of truth for that whole span instead of re-deriving it
+// from Sleeper — only seasons after 2025 get added from Sleeper on
+// top of this.
+const CAREER_RECORD_2020_2025 = {
+  Joey:   { wins: 48, losses: 35, ties: 0 },
+  Morgan: { wins: 48, losses: 35, ties: 0 },
+  Daniel: { wins: 45, losses: 38, ties: 0 },
+  JR:     { wins: 44, losses: 40, ties: 0 },
+  Austin: { wins: 43, losses: 40, ties: 0 },
+  Adam:   { wins: 43, losses: 40, ties: 0 },
+  Tim:    { wins: 42, losses: 41, ties: 0 },
+  Logan:  { wins: 41, losses: 42, ties: 0 },
+  Tyler:  { wins: 37, losses: 46, ties: 0 },
+  Kurt:   { wins: 37, losses: 46, ties: 0 },
+  Justin: { wins: 37, losses: 46, ties: 0 },
+  Dylan:  { wins: 34, losses: 50, ties: 0 }
 };
 
 const API = "https://api.sleeper.app/v1";
@@ -460,6 +622,59 @@ function renderSeasonNav() {
   });
 }
 
+/* =========================================================
+   GENERIC SORTABLE TABLE
+   columns: [{ key, label, numeric, render(row, i) => cell HTML }]
+   ========================================================= */
+function paintSortableTable(container, columns, rows, cellHTML, defaultKey, defaultDir) {
+  let sortKey = defaultKey;
+  let dir = defaultDir || "desc";
+
+  function getSorted() {
+    return rows.slice().sort((a, b) => {
+      let va = a[sortKey], vb = b[sortKey];
+      if (typeof va === "string" || typeof vb === "string") {
+        va = (va == null ? "" : String(va)).toLowerCase();
+        vb = (vb == null ? "" : String(vb)).toLowerCase();
+        if (va < vb) return dir === "asc" ? -1 : 1;
+        if (va > vb) return dir === "asc" ? 1 : -1;
+        return 0;
+      }
+      va = va == null ? -Infinity : va;
+      vb = vb == null ? -Infinity : vb;
+      return dir === "asc" ? va - vb : vb - va;
+    });
+  }
+
+  function paint() {
+    const theadHTML = `<tr>
+      <th></th>
+      ${columns.map(c => `
+        <th class="${c.numeric ? "num " : ""}sortable${c.key === sortKey ? " active-sort" : ""}" data-key="${c.key}">
+          ${c.label}${c.key === sortKey ? `<span class="sort-arrow">${dir === "asc" ? "\u25B2" : "\u25BC"}</span>` : ""}
+        </th>`).join("")}
+    </tr>`;
+    const sortedRows = getSorted();
+    const tbodyHTML = sortedRows.map((row, i) => cellHTML(row, i)).join("") ||
+      `<tr><td colspan="${columns.length + 1}">No data yet.</td></tr>`;
+
+    container.innerHTML = `<table class="hist-table sortable-table"><thead>${theadHTML}</thead><tbody>${tbodyHTML}</tbody></table>`;
+    container.querySelectorAll("th.sortable").forEach(th => {
+      th.addEventListener("click", () => {
+        const key = th.dataset.key;
+        if (key === sortKey) {
+          dir = dir === "asc" ? "desc" : "asc";
+        } else {
+          sortKey = key;
+          dir = columns.find(c => c.key === key).numeric ? "desc" : "asc";
+        }
+        paint();
+      });
+    });
+  }
+  paint();
+}
+
 function renderPlaceholder(season) {
   const champ = CHAMPIONS[season];
   document.getElementById("content").innerHTML = `
@@ -479,38 +694,42 @@ function renderStandings(season, teams, source) {
   }
 
   const hasRecord = teams[0].wins !== undefined;
+  const rows = teams.map(t => ({
+    ...t,
+    displayName: t.teamName || t.owner,
+    diff: t.pointsFor - t.pointsAgainst
+  }));
 
-  let rows = teams.map((t, i) => {
-    const diff = (t.pointsFor - t.pointsAgainst);
-    const diffClass = diff >= 0 ? "record-w" : "record-l";
-    const diffStr = (diff >= 0 ? "+" : "") + diff.toFixed(1);
-    return `
+  const columns = [
+    { key: "displayName", label: "Team" },
+    { key: "owner", label: "Owner" },
+    ...(hasRecord ? [{ key: "wins", label: "Record", numeric: true }] : []),
+    { key: "pointsFor", label: "Pts For", numeric: true },
+    { key: "pointsAgainst", label: "Pts Against", numeric: true },
+    { key: "diff", label: "Diff", numeric: true }
+  ];
+
+  paintSortableTable(
+    document.getElementById("content"),
+    columns,
+    rows,
+    (t, i) => {
+      const diffClass = t.diff >= 0 ? "record-w" : "record-l";
+      const diffStr = (t.diff >= 0 ? "+" : "") + t.diff.toFixed(1);
+      return `
       <tr>
         <td class="rank">${i + 1}</td>
-        <td class="team-name">${escapeHTML(t.teamName || t.owner)}</td>
+        <td class="team-name">${escapeHTML(t.displayName)}</td>
         <td class="owner">${escapeHTML(t.owner)}</td>
         ${hasRecord ? `<td class="num"><span class="record-w">${t.wins}</span>-<span class="record-l">${t.losses}</span>${t.ties ? "-" + t.ties : ""}</td>` : ""}
         <td class="num">${t.pointsFor.toFixed(1)}</td>
         <td class="num">${t.pointsAgainst.toFixed(1)}</td>
         <td class="num ${diffClass}">${diffStr}</td>
       </tr>`;
-  }).join("");
-
-  document.getElementById("content").innerHTML = `
-    <table class="standings">
-      <thead>
-        <tr>
-          <th></th>
-          <th>Team</th>
-          <th>Owner</th>
-          ${hasRecord ? `<th class="num">Record</th>` : ""}
-          <th class="num">Pts For</th>
-          <th class="num">Pts Against</th>
-          <th class="num">Diff</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>`;
+    },
+    hasRecord ? "wins" : "pointsFor",
+    "desc"
+  );
 }
 
 function renderScoreboard(season, teams) {
@@ -563,6 +782,252 @@ async function selectSeason(season) {
 
   renderStandings(season, teams, entry.source);
 }
+
+/* =========================================================
+   VIEW TOGGLE
+   ========================================================= */
+let historyLoaded = false;
+
+document.getElementById("viewToggle").addEventListener("click", async (e) => {
+  const btn = e.target.closest(".toggle-btn");
+  if (!btn) return;
+  document.querySelectorAll(".toggle-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+
+  const view = btn.dataset.view;
+  document.getElementById("seasonView").style.display = view === "season" ? "" : "none";
+  document.getElementById("historyView").style.display = view === "history" ? "" : "none";
+
+  if (view === "history" && !historyLoaded) {
+    historyLoaded = true;
+    await renderHistoryView();
+  }
+});
+
+/* =========================================================
+   HISTORICAL STATS
+   ========================================================= */
+async function ensureAllSeasonsLoaded() {
+  for (const entry of state.seasons) {
+    if (state.cache[entry.season]) continue;
+    let teams = null;
+    if (entry.source === "sleeper") {
+      teams = await computeSleeperStandings(entry);
+    } else if (entry.source === "historical") {
+      teams = getHistoricalStandings(entry.season);
+    }
+    state.cache[entry.season] = teams || [];
+    state.cache[entry.season].__source = entry.source;
+  }
+}
+
+function buildAllTimeRecordTable() {
+  const records = {};
+  Object.entries(CAREER_RECORD_2020_2025).forEach(([owner, r]) => {
+    records[owner] = { owner, wins: r.wins, losses: r.losses, ties: r.ties };
+  });
+
+  // Only seasons after 2025 get added from Sleeper — 2020-2025 already
+  // comes from the spreadsheet total above, so pulling those years from
+  // Sleeper too would double-count them.
+  state.seasons
+    .filter(s => s.season > 2025 && s.source === "sleeper")
+    .forEach(entry => {
+      const teams = state.cache[entry.season];
+      if (!teams) return;
+      teams.forEach(t => {
+        if (!records[t.owner]) records[t.owner] = { owner: t.owner, wins: 0, losses: 0, ties: 0 };
+        records[t.owner].wins += (t.wins || 0);
+        records[t.owner].losses += (t.losses || 0);
+        records[t.owner].ties += (t.ties || 0);
+      });
+    });
+
+  return Object.values(records).map(r => {
+    const games = r.wins + r.losses + r.ties;
+    return { ...r, winPct: games ? (r.wins + r.ties * 0.5) / games : 0 };
+  }).sort((a, b) => b.winPct - a.winPct);
+}
+
+function buildCareerAggregates() {
+  const byOwner = {}; // owner -> { seasons: [{season, rank, pointsFor, pointsAgainst}], titles: [] }
+
+  const ensure = (owner) => {
+    if (!byOwner[owner]) byOwner[owner] = { owner, seasons: [], titles: [] };
+    return byOwner[owner];
+  };
+
+  state.seasons.forEach(entry => {
+    const teams = state.cache[entry.season];
+    if (teams && teams.length) {
+      teams.forEach((t, i) => {
+        const rec = ensure(t.owner);
+        rec.seasons.push({
+          season: entry.season,
+          rank: t.rank != null ? t.rank : (i + 1),
+          pointsFor: t.pointsFor,
+          pointsAgainst: t.pointsAgainst
+        });
+      });
+    }
+  });
+
+  Object.keys(CHAMPIONS).forEach(yr => {
+    const owner = CHAMPIONS[yr];
+    ensure(owner).titles.push(parseInt(yr, 10));
+  });
+
+  return Object.values(byOwner);
+}
+
+function renderHistoryView() {
+  return ensureAllSeasonsLoaded().then(() => {
+    const careers = buildCareerAggregates();
+    const records = buildAllTimeRecordTable();
+
+    // ---- Championships ----
+    const champs = careers
+      .filter(c => c.titles.length)
+      .sort((a, b) => b.titles.length - a.titles.length || Math.min(...a.titles) - Math.min(...b.titles));
+
+    // ---- Career scoring (need >=1 season with points data) ----
+    const scoring = careers.filter(c => c.seasons.length).map(c => {
+      const n = c.seasons.length;
+      const avgFor = c.seasons.reduce((s, x) => s + (x.pointsFor || 0), 0) / n;
+      const avgAgainst = c.seasons.reduce((s, x) => s + (x.pointsAgainst || 0), 0) / n;
+      return { owner: c.owner, seasons: n, avgFor, avgAgainst, avgDiff: avgFor - avgAgainst };
+    });
+    const byAvgAgainst = scoring.slice().sort((a, b) => b.avgAgainst - a.avgAgainst);
+
+    // ---- Career average finish (needs rank data) ----
+    const finish = careers.filter(c => c.seasons.length).map(c => {
+      const ranks = c.seasons.map(x => x.rank);
+      const avg = ranks.reduce((s, r) => s + r, 0) / ranks.length;
+      return { owner: c.owner, avg, best: Math.min(...ranks), worst: Math.max(...ranks) };
+    }).sort((a, b) => a.avg - b.avg);
+
+    // ---- Merge win-loss + scoring + finish into one condensed Career Stats table ----
+    const recordMap = {}; records.forEach(r => recordMap[r.owner] = r);
+    const scoringMap = {}; scoring.forEach(s => scoringMap[s.owner] = s);
+    const finishMap = {}; finish.forEach(f => finishMap[f.owner] = f);
+    const titleMap = {}; champs.forEach(c => titleMap[c.owner] = c.titles.length);
+
+    const allOwners = new Set([...records.map(r => r.owner), ...scoring.map(s => s.owner)]);
+    const careerStats = Array.from(allOwners).map(owner => {
+      const r = recordMap[owner] || { wins: 0, losses: 0, ties: 0, winPct: 0 };
+      const s = scoringMap[owner] || { seasons: 0, avgFor: null, avgAgainst: null, avgDiff: null };
+      const f = finishMap[owner] || { avg: null, best: null, worst: null };
+      return {
+        owner, wins: r.wins, losses: r.losses, ties: r.ties, winPct: r.winPct,
+        seasons: s.seasons, avgFor: s.avgFor, avgAgainst: s.avgAgainst, avgDiff: s.avgDiff,
+        avgFinish: f.avg, bestFinish: f.best, worstFinish: f.worst, titles: titleMap[owner] || 0
+      };
+    });
+
+    // ---- Fun record cards ----
+    let bestSingleSeason = null, worstSingleSeasonAgainst = null;
+    careers.forEach(c => c.seasons.forEach(s => {
+      if (s.pointsFor != null && (!bestSingleSeason || s.pointsFor > bestSingleSeason.pointsFor)) {
+        bestSingleSeason = { owner: c.owner, season: s.season, pointsFor: s.pointsFor };
+      }
+      if (s.pointsAgainst != null && (!worstSingleSeasonAgainst || s.pointsAgainst > worstSingleSeasonAgainst.pointsAgainst)) {
+        worstSingleSeasonAgainst = { owner: c.owner, season: s.season, pointsAgainst: s.pointsAgainst };
+      }
+    }));
+
+    const mostTitles = champs[0];
+    const bestAvgFinish = finish[0];
+    const worstAvgFinish = finish[finish.length - 1];
+    const mostPointsAgainstCareer = byAvgAgainst[0];
+    const bestWinPct = records[0];
+
+    const cards = [
+      mostTitles && { label: "Most Championships", name: mostTitles.owner, detail: `${mostTitles.titles.length} title${mostTitles.titles.length !== 1 ? "s" : ""} (${mostTitles.titles.slice().sort((a,b)=>a-b).join(", ")})` },
+      bestWinPct && { label: "Best All-Time Win %", name: bestWinPct.owner, detail: `${bestWinPct.wins}-${bestWinPct.losses}${bestWinPct.ties ? "-" + bestWinPct.ties : ""} (${(bestWinPct.winPct*100).toFixed(1)}%)` },
+      bestSingleSeason && { label: "Highest Single-Season Points", name: bestSingleSeason.owner, detail: `${bestSingleSeason.pointsFor.toFixed(1)} pts in ${bestSingleSeason.season}` },
+      worstSingleSeasonAgainst && { label: "Most Points Given Up, One Season", name: worstSingleSeasonAgainst.owner, detail: `${worstSingleSeasonAgainst.pointsAgainst.toFixed(1)} pts in ${worstSingleSeasonAgainst.season}` },
+      bestAvgFinish && { label: "Best Career Average Finish", name: bestAvgFinish.owner, detail: `Avg finish: ${bestAvgFinish.avg.toFixed(2)}` },
+      worstAvgFinish && { label: "Worst Career Average Finish", name: worstAvgFinish.owner, detail: `Avg finish: ${worstAvgFinish.avg.toFixed(2)}` },
+      mostPointsAgainstCareer && { label: "Toughest Schedule, Career", name: mostPointsAgainstCareer.owner, detail: `${mostPointsAgainstCareer.avgAgainst.toFixed(1)} pts against / season` }
+    ].filter(Boolean);
+
+    const cardsHTML = cards.map(c => `
+      <div class="record-card">
+        <div class="rc-label">${escapeHTML(c.label)}</div>
+        <div class="rc-name">${escapeHTML(c.name)}</div>
+        <div class="rc-detail">${escapeHTML(c.detail)}</div>
+      </div>`).join("");
+
+    document.getElementById("historyContent").innerHTML = `
+      <div class="record-grid">${cardsHTML}</div>
+
+      <div class="hist-section">
+        <h2 class="hist-section-head">Career Stats</h2>
+        <p class="hist-section-sub">All-time record, scoring, and finish &mdash; click any column to sort. 2020&ndash;2025 record comes from league history, current season added on top; avg finish/scoring covers 2020&ndash;present.</p>
+        <div class="table-scroll" id="careerStatsTable"></div>
+      </div>
+
+      <div class="hist-section">
+        <h2 class="hist-section-head">Championships</h2>
+        <p class="hist-section-sub">Every title on record &mdash; who hoisted it, and when.</p>
+        <div class="table-scroll" id="championshipsTable"></div>
+      </div>
+    `;
+
+    paintSortableTable(
+      document.getElementById("careerStatsTable"),
+      [
+        { key: "owner", label: "Owner" },
+        { key: "titles", label: "\uD83C\uDFC6", numeric: true },
+        { key: "wins", label: "Record", numeric: true },
+        { key: "winPct", label: "Win %", numeric: true },
+        { key: "seasons", label: "Seasons", numeric: true },
+        { key: "avgFor", label: "Avg PF", numeric: true },
+        { key: "avgAgainst", label: "Avg PA", numeric: true },
+        { key: "avgDiff", label: "Avg Diff", numeric: true },
+        { key: "avgFinish", label: "Avg Finish", numeric: true },
+        { key: "bestFinish", label: "Best", numeric: true },
+        { key: "worstFinish", label: "Worst", numeric: true }
+      ],
+      careerStats,
+      (r, i) => `
+        <tr>
+          <td class="rank">${i + 1}</td>
+          <td class="team-name">${escapeHTML(r.owner)}</td>
+          <td class="num">${r.titles ? `\uD83C\uDFC6&times;${r.titles}` : "\u2014"}</td>
+          <td class="num"><span class="record-w">${r.wins}</span>-<span class="record-l">${r.losses}</span>${r.ties ? "-" + r.ties : ""}</td>
+          <td class="num">${(r.winPct * 100).toFixed(1)}%</td>
+          <td class="num">${r.seasons || "\u2014"}</td>
+          <td class="num">${r.avgFor != null ? r.avgFor.toFixed(1) : "\u2014"}</td>
+          <td class="num">${r.avgAgainst != null ? r.avgAgainst.toFixed(1) : "\u2014"}</td>
+          <td class="num ${r.avgDiff != null ? (r.avgDiff >= 0 ? "record-w" : "record-l") : ""}">${r.avgDiff != null ? ((r.avgDiff >= 0 ? "+" : "") + r.avgDiff.toFixed(1)) : "\u2014"}</td>
+          <td class="num">${r.avgFinish != null ? r.avgFinish.toFixed(2) : "\u2014"}</td>
+          <td class="num">${r.bestFinish != null ? r.bestFinish : "\u2014"}</td>
+          <td class="num">${r.worstFinish != null ? r.worstFinish : "\u2014"}</td>
+        </tr>`,
+      "winPct", "desc"
+    );
+
+    paintSortableTable(
+      document.getElementById("championshipsTable"),
+      [
+        { key: "owner", label: "Owner" },
+        { key: "titleCount", label: "Titles", numeric: true },
+        { key: "yearsStr", label: "Years" }
+      ],
+      champs.map(c => ({ owner: c.owner, titleCount: c.titles.length, yearsStr: c.titles.slice().sort((a,b)=>a-b).join(", ") })),
+      (c, i) => `
+        <tr>
+          <td class="rank">${i + 1}</td>
+          <td class="team-name">${escapeHTML(c.owner)}</td>
+          <td class="num"><span class="trophy-count">\uD83C\uDFC6 &times; ${c.titleCount}</span></td>
+          <td class="years-list">${c.yearsStr}</td>
+        </tr>`,
+      "titleCount", "desc"
+    );
+  });
+}
+
 
 async function init() {
   try {
