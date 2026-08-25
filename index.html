@@ -600,6 +600,228 @@ async function buildSeasonChain() {
 // league history (spreadsheet + champions), so career stats combine
 // correctly across both data sources instead of treating someone's
 // Sleeper handle as a separate person.
+// ---------------------------------------------------------------
+// 2026 PPR PLAYER VALUE RANKINGS
+// Consensus top-200 overall PPR rankings (Rotoworld/NBC Sports,
+// last updated 8/24/2026). Used to score rosters for the Roster
+// Rankings tab. Format: [rank, name, NFL team, position].
+// A player's fantasy value decays exponentially from their rank
+// (not linearly) since the gap between the #1 and #10 overall
+// player is much bigger in real fantasy scoring than the gap
+// between #100 and #110 -- this keeps elite players properly
+// dominant in the roster score instead of every rank being worth
+// the same amount.
+// ---------------------------------------------------------------
+const PLAYER_RANKS_2026 = [
+[1,'Jahmyr Gibbs','DET','RB'],
+[2,'Bijan Robinson','ATL','RB'],
+[3,'Ja\'Marr Chase','CIN','WR'],
+[4,'Puka Nacua','LAR','WR'],
+[5,'Jaxon Smith-Njigba','SEA','WR'],
+[6,'Christian McCaffrey','SF','RB'],
+[7,'Amon-Ra St. Brown','DET','WR'],
+[8,'Jonathan Taylor','IND','RB'],
+[9,'Justin Jefferson','MIN','WR'],
+[10,'CeeDee Lamb','DAL','WR'],
+[11,'James Cook','BUF','RB'],
+[12,'Saquon Barkley','PHI','RB'],
+[13,'De\'Von Achane','MIA','RB'],
+[14,'Drake London','ATL','WR'],
+[15,'Nico Collins','HOU','WR'],
+[16,'Brock Bowers','LV','TE'],
+[17,'Derrick Henry','BAL','RB'],
+[18,'Kenneth Walker III','KC','RB'],
+[19,'Chase Brown','CIN','RB'],
+[20,'A.J. Brown','PHI','WR'],
+[21,'Malik Nabers','NYG','WR'],
+[22,'Rashee Rice','KC','WR'],
+[23,'George Pickens','DAL','WR'],
+[24,'Omarion Hampton','LAC','RB'],
+[25,'Trey McBride','ARI','TE'],
+[26,'Chris Olave','NO','WR'],
+[27,'Travis Etienne Jr.','NO','RB'],
+[28,'Kyren Williams','LAR','RB'],
+[29,'Ashton Jeanty','LV','RB'],
+[30,'Josh Jacobs','GB','RB'],
+[31,'Josh Allen','BUF','QB'],
+[32,'Jeremiyah Love','ARI','RB'],
+[33,'Javonte Williams','DAL','RB'],
+[34,'Tetairoa Mcmillan','CAR','WR'],
+[35,'Colston Loveland','CHI','TE'],
+[36,'Tee Higgins','CIN','WR'],
+[37,'Breece Hall','NYJ','RB'],
+[38,'Zay Flowers','BAL','WR'],
+[39,'Ladd McConkey','LAC','WR'],
+[40,'DeVonta Smith','PHI','WR'],
+[41,'Bucky Irving','TB','RB'],
+[42,'Cam Skattebo','NYG','RB'],
+[43,'Jaylen Waddle','DEN','WR'],
+[44,'David Montgomery','HOU','RB'],
+[45,'D\'Andre Swift','CHI','RB'],
+[46,'Lamar Jackson','BAL','QB'],
+[47,'Garrett Wilson','NYJ','WR'],
+[48,'Quinshon Judkins','CLE','RB'],
+[49,'Emeka Egbuka','TB','WR'],
+[50,'Mike Evans','SF','WR'],
+[51,'Bhayshul Tuten','JAX','RB'],
+[52,'TreVeyon Henderson','NE','RB'],
+[53,'Davante Adams','LAR','WR'],
+[54,'Jadarian Price','SEA','RB'],
+[55,'Terry McLaurin','WAS','WR'],
+[56,'Jameson Williams','DET','WR'],
+[57,'Tyler Warren','IND','TE'],
+[58,'Luther Burden III','CHI','WR'],
+[59,'Jayden Daniels','WAS','QB'],
+[60,'Carnell Tate','TEN','WR'],
+[61,'Christian Watson','GB','WR'],
+[62,'Rome Odunze','CHI','WR'],
+[63,'D.J. Moore','BUF','WR'],
+[64,'Joe Burrow','CIN','QB'],
+[65,'Jaylen Warren','PIT','RB'],
+[66,'Drake Maye','NE','QB'],
+[67,'Blake Corum','LAR','RB'],
+[68,'Brian Thomas Jr.','JAX','WR'],
+[69,'Parker Washington','JAX','WR'],
+[70,'Marvin Harrison Jr.','ARI','WR'],
+[71,'Harold Fannin','CLE','TE'],
+[72,'Rico Dowdle','PIT','RB'],
+[73,'DK Metcalf','PIT','WR'],
+[74,'Tony Pollard','TEN','RB'],
+[75,'Jonathon Brooks','CAR','RB'],
+[76,'Rhamondre Stevenson','NE','RB'],
+[77,'Jordan Addison','MIN','WR'],
+[78,'J.K. Dobbins','DEN','RB'],
+[79,'RJ Harvey','DEN','RB'],
+[80,'Jalen Hurts','PHI','QB'],
+[81,'Tucker Kraft','GB','TE'],
+[82,'Makai Lemon','PHI','WR'],
+[83,'Dak Prescott','DAL','QB'],
+[84,'Michael Wilson','ARI','WR'],
+[85,'Justin Herbert','LAC','QB'],
+[86,'Patrick Mahomes','KC','QB'],
+[87,'Kyle Monangai','CHI','RB'],
+[88,'Sam LaPorta','DET','TE'],
+[89,'Caleb Williams','CHI','QB'],
+[90,'Josh Downs','IND','WR'],
+[91,'Jayden Reed','GB','WR'],
+[92,'Courtland Sutton','DEN','WR'],
+[93,'Chris Godwin','TB','WR'],
+[94,'Chuba Hubbard','CAR','RB'],
+[95,'Kyle Pitts','ATL','TE'],
+[96,'Rachaad White','WAS','RB'],
+[97,'Aaron Jones','MIN','RB'],
+[98,'Jaxson Dart','NYG','QB'],
+[99,'Jakobi Meyers','JAX','WR'],
+[100,'Wan\'Dale Robinson','TEN','WR'],
+[101,'Chris Rodriguez','JAX','RB'],
+[102,'Kenneth Gainwell','TB','RB'],
+[103,'Romeo Doubs','NE','WR'],
+[104,'Xavier Worthy','KC','WR'],
+[105,'Stefon Diggs','WAS','WR'],
+[106,'Jordan Love','GB','QB'],
+[107,'Brock Purdy','SF','QB'],
+[108,'KC Concepcion','CLE','WR'],
+[109,'Jordan Mason','MIN','RB'],
+[110,'Jacory Croskey-Merritt','WAS','RB'],
+[111,'Quentin Johnston','LAC','WR'],
+[112,'Alec Pierce','IND','WR'],
+[113,'Matthew Stafford','LAR','QB'],
+[114,'Keaton Mitchell','LAC','RB'],
+[115,'Jake Ferguson','DAL','TE'],
+[116,'Woody Marks','HOU','RB'],
+[117,'Trevor Lawrence','JAX','QB'],
+[118,'Matthew Golden','GB','WR'],
+[119,'Dalton Kincaid','BUF','TE'],
+[120,'Travis Kelce','KC','TE'],
+[121,'Travis Hunter','JAX','WR'],
+[122,'Jared Goff','DET','QB'],
+[123,'Michael Pittman Jr.','PIT','WR'],
+[124,'Kyler Murray','MIN','QB'],
+[125,'Mark Andrews','BAL','TE'],
+[126,'Bo Nix','DEN','QB'],
+[127,'Khalil Shakir','BUF','WR'],
+[128,'George Kittle','SF','TE'],
+[129,'Tyler Allgeier','ARI','RB'],
+[130,'Omar Cooper Jr.','NYJ','WR'],
+[131,'Tyjae Spears','TEN','RB'],
+[132,'Baker Mayfield','TB','QB'],
+[133,'Dallas Goedert','PHI','TE'],
+[134,'Deebo Samuel','FA','WR'],
+[135,'Jalen Coker','CAR','WR'],
+[136,'Dylan Sampson','CLE','RB'],
+[137,'De\'Zhaun Stribling','SF','WR'],
+[138,'Jordyn Tyson','NO','WR'],
+[139,'Jauan Jennings','MIN','WR'],
+[140,'Rashid Shaheed','SEA','WR'],
+[141,'Sam Darnold','SEA','QB'],
+[142,'Tyler Shough','NO','QB'],
+[143,'Juwan Johnson','NO','TE'],
+[144,'Jonah Coleman','DEN','RB'],
+[145,'Zach Charbonnet','SEA','RB'],
+[146,'Brian Robinson Jr.','ATL','RB'],
+[147,'Keenan Allen','IND','WR'],
+[148,'Isaiah Likely','NYG','TE'],
+[149,'Tre Tucker','LV','WR'],
+[150,'Denzel Boston','CLE','WR'],
+[151,'Germie Bernard','PIT','WR'],
+[152,'MarShawn Lloyd','GB','RB'],
+[153,'Braelon Allen','NYJ','RB'],
+[154,'Jalen McMillan','TB','WR'],
+[155,'Mike Washington','LV','RB'],
+[156,'Ja\'Kobi Lane','BAL','WR'],
+[157,'Hunter Henry','NE','TE'],
+[158,'C.J. Stroud','HOU','QB'],
+[159,'Caleb Douglas','MIA','WR'],
+[160,'Brenton Strange','JAX','TE'],
+[161,'Tre Harris','LAC','WR'],
+[162,'Adonai Mitchell','NYJ','WR'],
+[163,'Pat Bryant','DEN','WR'],
+[164,'Ted Hurst','TB','WR'],
+[165,'Daniel Jones','IND','QB'],
+[166,'Oronde Gadsden II','LAC','TE'],
+[167,'Jerry Jeudy','CLE','WR'],
+[168,'Calvin Ridley','TEN','WR'],
+[169,'Isiah Pacheco','DET','RB'],
+[170,'Malik Washington','MIA','WR'],
+[171,'Emmett Johnson','KC','RB'],
+[172,'T.J. Hockenson','MIN','TE'],
+[173,'Cyrus Allen','KC','WR'],
+[174,'Kayshon Boutte','NE','WR'],
+[175,'Sean Tucker','TB','RB'],
+[176,'Malik Willis','MIA','QB'],
+[177,'Zachariah Branch','ATL','WR'],
+[178,'Cooper Kupp','SEA','WR'],
+[179,'Tank Bigsby','PHI','RB'],
+[180,'Dontayvion Wicks','PHI','WR'],
+[181,'Tank Dell','HOU','WR'],
+[182,'Nick Singleton','TEN','RB'],
+[183,'Jaydon Blue','DAL','RB'],
+[184,'Chig Okonkwo','WAS','TE'],
+[185,'Kenyon Sadiq','NYJ','TE'],
+[186,'Bryce Lance','NO','WR'],
+[187,'Kaelon Black','SF','RB'],
+[188,'Tyrone Tracy Jr.','NYG','RB'],
+[189,'Dalton Schultz','HOU','TE'],
+[190,'DeVaughn Vele','NO','WR'],
+[191,'Alvin Kamara','NO','RB'],
+[192,'Kaytron Allen','WAS','RB'],
+[193,'George Holani','SEA','RB'],
+[194,'Jalen Nailor','LV','WR'],
+[195,'A.J. Barner','SEA','TE'],
+[196,'Isaac TeSlaa','DET','WR'],
+[197,'Rashod Bateman','BAL','WR'],
+[198,'Jaylin Noel','HOU','WR'],
+[199,'Darren Waller','CAR','TE']
+];
+const PLAYER_VALUE_MAP = {};
+PLAYER_RANKS_2026.forEach(([rank, name]) => {
+  PLAYER_VALUE_MAP[name.toLowerCase()] = 100 * Math.pow(0.977, rank - 1);
+});
+function playerValue(name) {
+  if (!name) return 0.4; // unranked/undrafted player floor value
+  return PLAYER_VALUE_MAP[name.toLowerCase()] ?? 0.4;
+}
+
 const OWNER_ALIASES = {
   "gstv": "Joey",
   "Pacfan8725": "Morgan",
@@ -810,76 +1032,155 @@ function escapeHTML(str) {
 }
 
 /* =========================================================
-   DRAFT RECAP
+   ROSTER RANKINGS
+   Scores each team's actual current roster against the 2026 PPR
+   value table above, using the league's real starting lineup
+   requirements to separate starter strength from bench depth.
    ========================================================= */
-async function renderDraftRecap(entry) {
+async function renderRosterRankings(entry) {
   const content = document.getElementById("content");
   const season = entry.season;
   state.subCache[season] = state.subCache[season] || {};
 
-  if (!state.subCache[season].draft) {
+  if (!state.subCache[season].roster) {
     try {
       const league = entry.leagueMeta || await getJSON(`${API}/league/${entry.leagueId}`);
-      const draftId = league.draft_id;
-      if (!draftId) {
-        state.subCache[season].draft = [];
-      } else {
-        const [picks, users] = await Promise.all([
-          getJSON(`${API}/draft/${draftId}/picks`),
-          getJSON(`${API}/league/${entry.leagueId}/users`)
-        ]);
-        const userMap = {};
-        users.forEach(u => { userMap[u.user_id] = u; });
-        state.subCache[season].draft = picks.map(p => {
-          const u = userMap[p.picked_by] || {};
-          const meta = p.metadata || {};
-          return {
-            round: p.round,
-            pickNo: p.pick_no,
-            owner: canonicalOwner(u.display_name || "Unknown"),
-            player: [meta.first_name, meta.last_name].filter(Boolean).join(" ") || "Unknown Player",
-            position: meta.position || "\u2014",
-            team: meta.team || "FA"
-          };
-        });
+      const [users, rosters] = await Promise.all([
+        getJSON(`${API}/league/${entry.leagueId}/users`),
+        getJSON(`${API}/league/${entry.leagueId}/rosters`)
+      ]);
+
+      // The full NFL player database is ~5MB and only needed here
+      // (to map roster player_ids to names) -- fetch once and hold
+      // in memory for the session rather than per-team.
+      if (!state.playersStatic) {
+        state.playersStatic = await getJSON(`${API}/players/nfl`);
       }
+      const playersDb = state.playersStatic;
+
+      const userMap = {};
+      users.forEach(u => { userMap[u.user_id] = u; });
+
+      const slots = (league.roster_positions || []).filter(p => p !== "BN" && p !== "IR" && p !== "TAXI");
+      const starterSlotCounts = {};
+      slots.forEach(s => { starterSlotCounts[s] = (starterSlotCounts[s] || 0) + 1; });
+
+      const teams = rosters.map(r => {
+        const u = userMap[r.owner_id] || {};
+        const owner = canonicalOwner(u.display_name || "Unknown");
+        const teamName = (u.metadata && u.metadata.team_name) || u.display_name || "Unknown Team";
+
+        const players = (r.players || []).map(pid => {
+          const p = playersDb[pid];
+          const name = p ? [p.first_name, p.last_name].filter(Boolean).join(" ") : null;
+          const position = p ? p.position : "?";
+          return { name: name || "Unknown", position, value: playerValue(name) };
+        }).filter(p => ["QB", "RB", "WR", "TE"].includes(p.position));
+
+        // Greedily fill required starter slots with the highest-value
+        // eligible player left, position-specific slots first, then
+        // FLEX/SUPER_FLEX/WRRB/etc with whatever's left over -- this
+        // mirrors how a manager would actually set their lineup.
+        const pool = players.slice().sort((a, b) => b.value - a.value);
+        const used = new Set();
+        let starterValue = 0;
+        const posEligibility = {
+          QB: ["QB"], RB: ["RB"], WR: ["WR"], TE: ["TE"],
+          FLEX: ["RB", "WR", "TE"], WRRB_FLEX: ["RB", "WR"], REC_FLEX: ["WR", "TE"],
+          SUPER_FLEX: ["QB", "RB", "WR", "TE"]
+        };
+        const slotOrder = Object.keys(starterSlotCounts).sort((a, b) => {
+          const width = k => (posEligibility[k] || ["QB", "RB", "WR", "TE"]).length;
+          return width(a) - width(b);
+        });
+        slotOrder.forEach(slotKey => {
+          const count = starterSlotCounts[slotKey];
+          const eligible = posEligibility[slotKey] || ["QB", "RB", "WR", "TE"];
+          for (let i = 0; i < count; i++) {
+            const pick = pool.find(p => !used.has(p) && eligible.includes(p.position));
+            if (pick) { used.add(pick); starterValue += pick.value; }
+          }
+        });
+        const benchValue = pool.filter(p => !used.has(p)).reduce((s, p) => s + p.value, 0);
+
+        const byPos = { QB: 0, RB: 0, WR: 0, TE: 0 };
+        players.forEach(p => { byPos[p.position] += p.value; });
+        const bestPlayer = pool[0] || null;
+
+        return {
+          owner, teamName,
+          rosterScore: starterValue + benchValue * 0.15,
+          starterValue, benchValue,
+          byPos, bestPlayer,
+          playerCount: players.length
+        };
+      });
+
+      state.subCache[season].roster = teams;
     } catch (e) {
-      state.subCache[season].draft = null;
+      state.subCache[season].roster = null;
     }
   }
 
-  const picks = state.subCache[season].draft;
+  const teams = state.subCache[season].roster;
 
-  if (picks === null) {
-    content.innerHTML = `<div class="placeholder-box"><strong>Couldn't load the draft</strong>Check your connection and try again.</div>`;
+  if (teams === null) {
+    content.innerHTML = `<div class="placeholder-box"><strong>Couldn't load rosters</strong>Check your connection and try again.</div>`;
     return;
   }
-  if (!picks.length) {
-    content.innerHTML = `<div class="placeholder-box"><strong>No draft on record</strong>Sleeper doesn't have draft data for ${season}.</div>`;
+  if (!teams.length) {
+    content.innerHTML = `<div class="placeholder-box"><strong>No rosters yet</strong>Rosters for ${season} aren't set.</div>`;
     return;
   }
+
+  const ranked = teams.slice().sort((a, b) => b.rosterScore - a.rosterScore);
+
+  // ---- Tidbits: strongest/weakest position groups league-wide ----
+  const posTotals = { QB: [], RB: [], WR: [], TE: [] };
+  ranked.forEach(t => Object.keys(posTotals).forEach(pos => posTotals[pos].push({ owner: t.owner, val: t.byPos[pos] })));
+  const bestAt = pos => posTotals[pos].slice().sort((a, b) => b.val - a.val)[0];
+  const worstAt = pos => posTotals[pos].slice().sort((a, b) => a.val - b.val)[0];
+
+  const tidbits = [
+    `<strong>${escapeHTML(ranked[0].owner)}</strong> has the strongest roster on paper, powered by ${escapeHTML(ranked[0].bestPlayer ? ranked[0].bestPlayer.name : "a deep group")} and a well-rounded lineup.`,
+    `Best QB room: <strong>${escapeHTML(bestAt("QB").owner)}</strong>. Best RB room: <strong>${escapeHTML(bestAt("RB").owner)}</strong>. Best WR corps: <strong>${escapeHTML(bestAt("WR").owner)}</strong>. Best TE situation: <strong>${escapeHTML(bestAt("TE").owner)}</strong>.`,
+    `Thinnest spots to watch: <strong>${escapeHTML(worstAt("RB").owner)}</strong> at RB and <strong>${escapeHTML(worstAt("WR").owner)}</strong> at WR could be hunting the waiver wire early.`,
+    `<strong>${escapeHTML(ranked[ranked.length - 1].owner)}</strong> ranks last in roster strength right now &mdash; not a death sentence this early, but worth monitoring through waivers.`
+  ];
+
+  content.innerHTML = `
+    <p class="panel-note" style="margin-bottom:6px;display:block;">Scores each team's actual roster against 2026 PPR consensus rankings (Rotoworld, updated 8/24) &mdash; starters count in full, bench depth counts partially. Click any column to sort.</p>
+    <div class="table-scroll" id="rosterRankTable" style="margin-bottom:20px;"></div>
+    <div class="hist-section" style="margin-bottom:0;">
+      <h2 class="hist-section-head" style="font-size:17px;">Notes</h2>
+      <ul style="margin:0; padding-left:18px; color:var(--chalk-dim); font-size:13.5px; line-height:1.9;">
+        ${tidbits.map(t => `<li>${t}</li>`).join("")}
+      </ul>
+    </div>
+  `;
 
   paintSortableTable(
-    content,
+    document.getElementById("rosterRankTable"),
     [
-      { key: "pickNo", label: "Pick", numeric: true },
-      { key: "round", label: "Round", numeric: true },
+      { key: "teamName", label: "Team" },
       { key: "owner", label: "Owner" },
-      { key: "player", label: "Player" },
-      { key: "position", label: "Pos" },
-      { key: "team", label: "NFL Team" }
+      { key: "rosterScore", label: "Roster Score", numeric: true },
+      { key: "starterValue", label: "Starters", numeric: true },
+      { key: "benchValue", label: "Bench", numeric: true },
+      { key: "bestPlayerName", label: "Top Player" }
     ],
-    picks,
-    (p) => `
+    ranked.map(t => ({ ...t, bestPlayerName: t.bestPlayer ? t.bestPlayer.name : "\u2014" })),
+    (t, i) => `
       <tr>
-        <td class="rank">${p.pickNo}</td>
-        <td class="team-name">${p.round}</td>
-        <td class="owner">${escapeHTML(p.owner)}</td>
-        <td class="team-name">${escapeHTML(p.player)}</td>
-        <td class="num">${escapeHTML(p.position)}</td>
-        <td class="num">${escapeHTML(p.team)}</td>
+        <td class="rank">${i + 1}</td>
+        <td class="team-name">${escapeHTML(t.teamName)}</td>
+        <td class="owner">${escapeHTML(t.owner)}</td>
+        <td class="num" style="color: var(--amber); font-family: 'IBM Plex Mono', monospace;">${t.rosterScore.toFixed(1)}</td>
+        <td class="num">${t.starterValue.toFixed(1)}</td>
+        <td class="num">${t.benchValue.toFixed(1)}</td>
+        <td class="team-name">${escapeHTML(t.bestPlayerName)}</td>
       </tr>`,
-    "pickNo", "asc"
+    "rosterScore", "desc"
   );
 }
 
@@ -1131,7 +1432,7 @@ function renderSeasonSubNav(entry) {
   }
   const tabs = [
     { key: "standings", label: "Standings" },
-    { key: "draft", label: "Draft Recap" },
+    { key: "roster", label: "Roster Rankings" },
     { key: "power", label: "Power Rankings" },
     { key: "playoff", label: "Playoff Picture" }
   ];
@@ -1155,9 +1456,9 @@ async function selectSubView(entry, view) {
     renderStandings(season, teams, entry.source);
     return;
   }
-  if (view === "draft") {
-    content.innerHTML = `<div class="loading-row">Loading draft board&hellip;</div>`;
-    await renderDraftRecap(entry);
+  if (view === "roster") {
+    content.innerHTML = `<div class="loading-row">Scoring rosters against 2026 rankings&hellip;</div>`;
+    await renderRosterRankings(entry);
     return;
   }
   if (view === "power") {
