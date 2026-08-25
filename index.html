@@ -273,6 +273,29 @@
   .toggle-btn.active { background: var(--amber); color: var(--ink); font-weight: 700; }
   .toggle-btn:hover:not(.active) { color: var(--chalk); }
 
+  /* ---------- SEASON SUB-TABS ---------- */
+  .sub-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 4px 0 20px;
+  }
+  .sub-tab-btn {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    background: var(--field-2);
+    color: var(--chalk-dim);
+    border: 1px solid var(--turf-line);
+    border-radius: 999px;
+    padding: 6px 14px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease;
+  }
+  .sub-tab-btn:hover:not(.active) { color: var(--chalk); border-color: rgba(124,90,196,0.5); }
+  .sub-tab-btn.active { color: var(--ink); background: var(--amber); border-color: var(--amber); font-weight: 700; }
+
   /* ---------- HISTORICAL STATS ---------- */
   #historyView { padding: 36px 0 80px; }
   .hist-section { margin-bottom: 44px; }
@@ -416,6 +439,7 @@
         <h2 class="panel-title" id="panelTitle">Standings</h2>
         <span class="panel-note" id="panelNote"></span>
       </div>
+      <div class="sub-tabs" id="seasonSubNav"></div>
       <div id="content"><div class="loading-row">Fetching standings&hellip;</div></div>
     </main>
   </div>
@@ -528,7 +552,9 @@ const API = "https://api.sleeper.app/v1";
 const state = {
   seasons: [],        // [{season, leagueId, source: 'sleeper'|'historical'}]
   activeSeason: null,
-  cache: {}           // season -> computed standings
+  activeSubView: "standings",
+  cache: {},           // season -> computed standings
+  subCache: {}          // season -> { draft: [...], power: [...], playoff: {...} }
 };
 
 /* =========================================================
@@ -784,11 +810,296 @@ function escapeHTML(str) {
 }
 
 /* =========================================================
+   DRAFT RECAP
+   ========================================================= */
+async function renderDraftRecap(entry) {
+  const content = document.getElementById("content");
+  const season = entry.season;
+  state.subCache[season] = state.subCache[season] || {};
+
+  if (!state.subCache[season].draft) {
+    try {
+      const league = entry.leagueMeta || await getJSON(`${API}/league/${entry.leagueId}`);
+      const draftId = league.draft_id;
+      if (!draftId) {
+        state.subCache[season].draft = [];
+      } else {
+        const [picks, users] = await Promise.all([
+          getJSON(`${API}/draft/${draftId}/picks`),
+          getJSON(`${API}/league/${entry.leagueId}/users`)
+        ]);
+        const userMap = {};
+        users.forEach(u => { userMap[u.user_id] = u; });
+        state.subCache[season].draft = picks.map(p => {
+          const u = userMap[p.picked_by] || {};
+          const meta = p.metadata || {};
+          return {
+            round: p.round,
+            pickNo: p.pick_no,
+            owner: canonicalOwner(u.display_name || "Unknown"),
+            player: [meta.first_name, meta.last_name].filter(Boolean).join(" ") || "Unknown Player",
+            position: meta.position || "\u2014",
+            team: meta.team || "FA"
+          };
+        });
+      }
+    } catch (e) {
+      state.subCache[season].draft = null;
+    }
+  }
+
+  const picks = state.subCache[season].draft;
+
+  if (picks === null) {
+    content.innerHTML = `<div class="placeholder-box"><strong>Couldn't load the draft</strong>Check your connection and try again.</div>`;
+    return;
+  }
+  if (!picks.length) {
+    content.innerHTML = `<div class="placeholder-box"><strong>No draft on record</strong>Sleeper doesn't have draft data for ${season}.</div>`;
+    return;
+  }
+
+  paintSortableTable(
+    content,
+    [
+      { key: "pickNo", label: "Pick", numeric: true },
+      { key: "round", label: "Round", numeric: true },
+      { key: "owner", label: "Owner" },
+      { key: "player", label: "Player" },
+      { key: "position", label: "Pos" },
+      { key: "team", label: "NFL Team" }
+    ],
+    picks,
+    (p) => `
+      <tr>
+        <td class="rank">${p.pickNo}</td>
+        <td class="team-name">${p.round}</td>
+        <td class="owner">${escapeHTML(p.owner)}</td>
+        <td class="team-name">${escapeHTML(p.player)}</td>
+        <td class="num">${escapeHTML(p.position)}</td>
+        <td class="num">${escapeHTML(p.team)}</td>
+      </tr>`,
+    "pickNo", "asc"
+  );
+}
+
+/* =========================================================
+   IN-SEASON POWER RANKINGS
+   ========================================================= */
+async function renderInSeasonPowerRankings(entry) {
+  const content = document.getElementById("content");
+  const season = entry.season;
+  state.subCache[season] = state.subCache[season] || {};
+
+  if (!state.subCache[season].power) {
+    try {
+      const [users, rosters, nflState] = await Promise.all([
+        getJSON(`${API}/league/${entry.leagueId}/users`),
+        getJSON(`${API}/league/${entry.leagueId}/rosters`),
+        getJSON(`${API}/state/nfl`)
+      ]);
+      const userMap = {};
+      users.forEach(u => { userMap[u.user_id] = u; });
+      const rosterOwner = {};
+      const rosterTeamName = {};
+      rosters.forEach(r => {
+        const u = userMap[r.owner_id] || {};
+        rosterOwner[r.roster_id] = canonicalOwner(u.display_name || "Unknown");
+        rosterTeamName[r.roster_id] = (u.metadata && u.metadata.team_name) || u.display_name || "Unknown Team";
+      });
+
+      const currentWeek = (nflState && nflState.week) || 1;
+      const perRoster = {};
+      Object.keys(rosterOwner).forEach(rid => {
+        perRoster[rid] = { rosterId: rid, owner: rosterOwner[rid], teamName: rosterTeamName[rid], weekly: [], wins: 0, losses: 0, ties: 0 };
+      });
+
+      let weeksPlayed = 0;
+      for (let wk = 1; wk <= currentWeek; wk++) {
+        let matchups;
+        try {
+          matchups = await getJSON(`${API}/league/${entry.leagueId}/matchups/${wk}`);
+        } catch (e) {
+          continue;
+        }
+        if (!matchups || !matchups.length) continue;
+        const anyPoints = matchups.some(m => (m.points || 0) > 0);
+        if (!anyPoints) continue;
+        weeksPlayed++;
+
+        const byMatchup = {};
+        matchups.forEach(m => {
+          if (m.matchup_id == null) return;
+          byMatchup[m.matchup_id] = byMatchup[m.matchup_id] || [];
+          byMatchup[m.matchup_id].push(m);
+        });
+
+        matchups.forEach(m => {
+          if (!perRoster[m.roster_id]) return;
+          perRoster[m.roster_id].weekly.push(m.points || 0);
+        });
+
+        Object.values(byMatchup).forEach(pair => {
+          if (pair.length !== 2) return;
+          const [a, b] = pair;
+          if (!perRoster[a.roster_id] || !perRoster[b.roster_id]) return;
+          if ((a.points || 0) > (b.points || 0)) {
+            perRoster[a.roster_id].wins++;
+            perRoster[b.roster_id].losses++;
+          } else if ((a.points || 0) < (b.points || 0)) {
+            perRoster[b.roster_id].wins++;
+            perRoster[a.roster_id].losses++;
+          } else {
+            perRoster[a.roster_id].ties++;
+            perRoster[b.roster_id].ties++;
+          }
+        });
+      }
+
+      state.subCache[season].power = { weeksPlayed, rosters: Object.values(perRoster) };
+    } catch (e) {
+      state.subCache[season].power = null;
+    }
+  }
+
+  const data = state.subCache[season].power;
+
+  if (data === null) {
+    content.innerHTML = `<div class="placeholder-box"><strong>Couldn't load weekly scores</strong>Check your connection and try again.</div>`;
+    return;
+  }
+  if (!data.weeksPlayed) {
+    content.innerHTML = `<div class="placeholder-box"><strong>Season hasn't kicked off yet</strong>Power rankings for ${season} will populate once games start counting.</div>`;
+    return;
+  }
+
+  const rows = data.rosters
+    .filter(r => r.weekly.length)
+    .map(r => {
+      const games = r.weekly.length;
+      const total = r.weekly.reduce((s, p) => s + p, 0);
+      const avg = total / games;
+      const last3 = r.weekly.slice(-3);
+      const recentForm = last3.reduce((s, p) => s + p, 0) / last3.length;
+      const gp = r.wins + r.losses + r.ties;
+      const winPct = gp ? (r.wins + r.ties * 0.5) / gp : 0;
+      return { owner: r.owner, teamName: r.teamName, wins: r.wins, losses: r.losses, ties: r.ties, winPct, avg, recentForm, total };
+    });
+
+  const range = arr => ({ min: Math.min(...arr), max: Math.max(...arr) });
+  const normalize = (v, min, max) => max === min ? 100 : (v - min) / (max - min) * 100;
+  const wpR = range(rows.map(r => r.winPct));
+  const avgR = range(rows.map(r => r.avg));
+  const formR = range(rows.map(r => r.recentForm));
+  const diffR = range(rows.map(r => r.avg)); // proxy: uses scoring range again for stability when no PA tracked weekly here
+
+  const ranked = rows.map(r => {
+    const score =
+      normalize(r.winPct, wpR.min, wpR.max) * 0.30 +
+      normalize(r.avg, avgR.min, avgR.max) * 0.25 +
+      normalize(r.recentForm, formR.min, formR.max) * 0.25 +
+      normalize(r.avg, diffR.min, diffR.max) * 0.20;
+    return { ...r, score };
+  }).sort((a, b) => b.score - a.score);
+
+  content.innerHTML = `<p class="panel-note" style="margin-bottom:14px;display:block;">Through ${data.weeksPlayed} week${data.weeksPlayed !== 1 ? "s" : ""} &middot; blends win % (30%), scoring average (25%), last-3-week form (25%), and week-to-week diff (20%)</p><div class="table-scroll" id="inSeasonPowerTable"></div>`;
+
+  paintSortableTable(
+    document.getElementById("inSeasonPowerTable"),
+    [
+      { key: "teamName", label: "Team" },
+      { key: "owner", label: "Owner" },
+      { key: "score", label: "Power Score", numeric: true },
+      { key: "wins", label: "Record", numeric: true },
+      { key: "avg", label: "Avg Pts", numeric: true },
+      { key: "recentForm", label: "Last 3 Avg", numeric: true }
+    ],
+    ranked,
+    (r, i) => `
+      <tr>
+        <td class="rank">${i + 1}</td>
+        <td class="team-name">${escapeHTML(r.teamName)}</td>
+        <td class="owner">${escapeHTML(r.owner)}</td>
+        <td class="num" style="color: var(--amber); font-family: 'IBM Plex Mono', monospace;">${r.score.toFixed(1)}</td>
+        <td class="num"><span class="record-w">${r.wins}</span>-<span class="record-l">${r.losses}</span>${r.ties ? "-" + r.ties : ""}</td>
+        <td class="num">${r.avg.toFixed(1)}</td>
+        <td class="num">${r.recentForm.toFixed(1)}</td>
+      </tr>`,
+    "score", "desc"
+  );
+}
+
+/* =========================================================
+   PLAYOFF PICTURE
+   ========================================================= */
+async function renderPlayoffPicture(entry) {
+  const content = document.getElementById("content");
+  const season = entry.season;
+
+  let teams = state.cache[season];
+  if (!teams || !teams.length) {
+    try {
+      teams = await computeSleeperStandings(entry);
+      teams.__source = "sleeper";
+      state.cache[season] = teams;
+    } catch (e) {
+      content.innerHTML = `<div class="placeholder-box"><strong>Couldn't load standings</strong>Check your connection and try again.</div>`;
+      return;
+    }
+  }
+
+  const league = entry.leagueMeta || {};
+  const playoffSpots = (league.settings && league.settings.playoff_teams) || 6;
+  const sorted = teams.slice().sort((a, b) => (b.wins - a.wins) || (b.pointsFor - a.pointsFor));
+  const cutoffTeam = sorted[playoffSpots - 1];
+
+  const rows = sorted.map((t, i) => {
+    const inPlayoffs = i < playoffSpots;
+    let back = "\u2014";
+    if (!inPlayoffs && cutoffTeam) {
+      const winsBack = cutoffTeam.wins - t.wins;
+      back = winsBack > 0 ? `${winsBack.toFixed(1)} game${winsBack !== 1 ? "s" : ""}` : `${(cutoffTeam.pointsFor - t.pointsFor).toFixed(1)} pts`;
+    }
+    return { ...t, rank: i + 1, status: inPlayoffs ? "In" : "Out", back, isCutoff: i === playoffSpots - 1 };
+  });
+
+  content.innerHTML = `<p class="panel-note" style="margin-bottom:14px;display:block;">Top ${playoffSpots} make the playoffs &middot; current order by record, then points for</p><div class="table-scroll" id="playoffTable"></div>`;
+
+  paintSortableTable(
+    document.getElementById("playoffTable"),
+    [
+      { key: "teamName", label: "Team" },
+      { key: "owner", label: "Owner" },
+      { key: "wins", label: "Record", numeric: true },
+      { key: "pointsFor", label: "Pts For", numeric: true },
+      { key: "status", label: "Status" },
+      { key: "back", label: "Back" }
+    ],
+    rows,
+    (r, i) => `
+      <tr${r.isCutoff ? ' style="border-bottom: 2px solid var(--amber);"' : ""}>
+        <td class="rank">${r.rank}</td>
+        <td class="team-name">${escapeHTML(r.teamName)}</td>
+        <td class="owner">${escapeHTML(r.owner)}</td>
+        <td class="num"><span class="record-w">${r.wins}</span>-<span class="record-l">${r.losses}</span>${r.ties ? "-" + r.ties : ""}</td>
+        <td class="num">${r.pointsFor.toFixed(1)}</td>
+        <td class="num ${r.status === "In" ? "record-w" : "record-l"}">${r.status}</td>
+        <td class="num">${r.back}</td>
+      </tr>`,
+    "wins", "desc"
+  );
+}
+
+/* =========================================================
    NAVIGATION / CONTROL FLOW
    ========================================================= */
 async function selectSeason(season) {
   state.activeSeason = season;
+  state.activeSubView = "standings";
   renderSeasonNav();
+
+  const entry = state.seasons.find(s => s.season === season);
+  renderSeasonSubNav(entry);
 
   if (state.cache[season]) {
     renderStandings(season, state.cache[season], state.cache[season].__source);
@@ -798,7 +1109,6 @@ async function selectSeason(season) {
 
   document.getElementById("content").innerHTML = `<div class="loading-row">Loading ${season}&hellip;</div>`;
 
-  const entry = state.seasons.find(s => s.season === season);
   let teams = null;
   if (entry.source === "sleeper") {
     teams = await computeSleeperStandings(entry);
@@ -812,6 +1122,56 @@ async function selectSeason(season) {
 
   renderStandings(season, teams, entry.source);
 }
+
+function renderSeasonSubNav(entry) {
+  const nav = document.getElementById("seasonSubNav");
+  if (!entry || entry.source !== "sleeper") {
+    nav.innerHTML = "";
+    return;
+  }
+  const tabs = [
+    { key: "standings", label: "Standings" },
+    { key: "draft", label: "Draft Recap" },
+    { key: "power", label: "Power Rankings" },
+    { key: "playoff", label: "Playoff Picture" }
+  ];
+  nav.innerHTML = tabs.map(t =>
+    `<button class="sub-tab-btn${t.key === state.activeSubView ? " active" : ""}" data-sub="${t.key}">${t.label}</button>`
+  ).join("");
+  nav.querySelectorAll(".sub-tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => selectSubView(entry, btn.dataset.sub));
+  });
+}
+
+async function selectSubView(entry, view) {
+  state.activeSubView = view;
+  renderSeasonSubNav(entry);
+
+  const content = document.getElementById("content");
+  const season = entry.season;
+
+  if (view === "standings") {
+    const teams = state.cache[season];
+    renderStandings(season, teams, entry.source);
+    return;
+  }
+  if (view === "draft") {
+    content.innerHTML = `<div class="loading-row">Loading draft board&hellip;</div>`;
+    await renderDraftRecap(entry);
+    return;
+  }
+  if (view === "power") {
+    content.innerHTML = `<div class="loading-row">Crunching weekly scores&hellip;</div>`;
+    await renderInSeasonPowerRankings(entry);
+    return;
+  }
+  if (view === "playoff") {
+    content.innerHTML = `<div class="loading-row">Checking the standings&hellip;</div>`;
+    await renderPlayoffPicture(entry);
+    return;
+  }
+}
+
 
 /* =========================================================
    VIEW TOGGLE
