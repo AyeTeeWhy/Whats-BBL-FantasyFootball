@@ -451,8 +451,14 @@
     grid-template-columns: 1fr 1fr;
     gap: 20px;
     margin-top: 14px;
+    text-align: center;
   }
-  .mi-col { font-size: 12.5px; color: var(--chalk-dim); }
+  .mi-col {
+    font-size: 12.5px;
+    color: var(--chalk-dim);
+    border-top: 1px solid var(--turf-line);
+    padding-top: 10px;
+  }
   .mi-team {
     font-family: 'IBM Plex Mono', monospace;
     font-size: 11px;
@@ -630,6 +636,21 @@ async function getJSON(url) {
   const res = await fetch(url);
   if (!res.ok) throw new Error("Request failed: " + url);
   return res.json();
+}
+
+// Sleeper's /state/nfl "week" field tracks the *preseason* week
+// during preseason (season_type "pre"), not the fantasy week -- so
+// trusting it blindly before the season starts pulls whatever
+// preseason-numbered week happens to match, which can land on a
+// completely different (and already-scheduled) fantasy week's
+// matchups. Fantasy weeks only mean anything once the regular
+// season (or postseason) is underway; anything else is week 1.
+function currentFantasyWeek(nflState) {
+  if (!nflState) return 1;
+  if (nflState.season_type === "regular" || nflState.season_type === "post") {
+    return nflState.week || 1;
+  }
+  return 1;
 }
 
 async function buildSeasonChain() {
@@ -1275,7 +1296,7 @@ async function renderInSeasonPowerRankings(entry) {
         rosterTeamName[r.roster_id] = (u.metadata && u.metadata.team_name) || u.display_name || "Unknown Team";
       });
 
-      const currentWeek = (nflState && nflState.week) || 1;
+      const currentWeek = currentFantasyWeek(nflState);
       const perRoster = {};
       Object.keys(rosterOwner).forEach(rid => {
         perRoster[rid] = { rosterId: rid, owner: rosterOwner[rid], teamName: rosterTeamName[rid], weekly: [], wins: 0, losses: 0, ties: 0 };
@@ -1482,7 +1503,7 @@ async function renderWeeklyMatchups(entry) {
       getJSON(`${API}/league/${entry.leagueId}/users`),
       getJSON(`${API}/league/${entry.leagueId}/rosters`)
     ]);
-    const week = nflState.week || 1;
+    const week = currentFantasyWeek(nflState);
     const matchups = await getJSON(`${API}/league/${entry.leagueId}/matchups/${week}`);
 
     if (!matchups || !matchups.length) {
