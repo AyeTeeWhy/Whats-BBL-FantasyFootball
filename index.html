@@ -832,6 +832,11 @@ const LEAGUES = {
     // Every member has been in this league since it started, so
     // "seasons" in Career Stats means full league tenure for everyone.
     uniformTenure: true,
+    // How many teams made the playoffs in the two spreadsheet-only
+    // years (2020-2021) isn't on record -- falls back at runtime to
+    // whatever the league's actual current Sleeper playoff_teams
+    // setting is, since that rarely changes format year to year.
+    historicalPlayoffSpots: null,
     theme: {
       field: "#161E1A", field2: "#212B24", field3: "#34463A",
       turfLine: "rgba(224,232,220,0.12)",
@@ -853,6 +858,9 @@ const LEAGUES = {
     // and joined over the years), so "seasons" should reflect each
     // person's actual number of seasons played, not a shared total.
     uniformTenure: false,
+    // Real value from ESPN's settings for every year 2017-2025 (the
+    // league has always taken its top 4 teams to the playoffs).
+    historicalPlayoffSpots: 4,
     theme: {
       field: "#131722", field2: "#1C2434", field3: "#2A3550",
       turfLine: "rgba(220,226,240,0.12)",
@@ -2017,6 +2025,42 @@ function computeLeagueTenure() {
   return state.seasons.length - (currentInProgress ? 1 : 0);
 }
 
+function buildPlayoffAppearances(careers) {
+  // Figure out how many teams made the playoffs in each season. Real
+  // Sleeper seasons carry their own actual setting; historical seasons
+  // use the league's known historical value if there is one, and
+  // otherwise fall back to whatever the league's current Sleeper
+  // playoff_teams setting is (format rarely changes year to year).
+  const sleeperEntries = state.seasons.filter(s => s.source === "sleeper" && s.leagueMeta && s.leagueMeta.settings);
+  const liveFallback = sleeperEntries.length ? (sleeperEntries[sleeperEntries.length - 1].leagueMeta.settings.playoff_teams || null) : null;
+
+  const spotsForSeason = {};
+  state.seasons.forEach(entry => {
+    let spots = null;
+    if (entry.source === "sleeper" && entry.leagueMeta && entry.leagueMeta.settings) {
+      spots = entry.leagueMeta.settings.playoff_teams || null;
+    } else if (CONFIG.historicalPlayoffSpots != null) {
+      spots = CONFIG.historicalPlayoffSpots;
+    } else {
+      spots = liveFallback;
+    }
+    spotsForSeason[entry.season] = spots;
+  });
+
+  const results = {};
+  careers.forEach(c => {
+    let made = 0, known = 0;
+    c.seasons.forEach(s => {
+      const spots = spotsForSeason[s.season];
+      if (spots == null || s.rank == null) return;
+      known++;
+      if (s.rank <= spots) made++;
+    });
+    results[c.owner] = { made, known };
+  });
+  return results;
+}
+
 function buildAllTimeRecordTable(careers) {
   const records = {};
   const overrideYears = new Set(CONFIG.overrideYears || []);
@@ -2124,10 +2168,12 @@ function renderHistoryView() {
 
     const allOwners = new Set([...records.map(r => r.owner), ...scoring.map(s => s.owner)]);
     const leagueTenure = computeLeagueTenure();
+    const playoffMap = buildPlayoffAppearances(careers);
     const careerStats = Array.from(allOwners).map(owner => {
       const r = recordMap[owner] || { wins: 0, losses: 0, ties: 0, winPct: 0 };
       const s = scoringMap[owner] || { seasons: 0, avgFor: null, avgAgainst: null, avgDiff: null };
       const f = finishMap[owner] || { avg: null, best: null, worst: null };
+      const p = playoffMap[owner] || { made: 0, known: 0 };
       // Some leagues have had every member since day one, in which
       // case "seasons" means league tenure; others have had real
       // membership turnover, in which case it should reflect how
@@ -2136,25 +2182,23 @@ function renderHistoryView() {
       return {
         owner, wins: r.wins, losses: r.losses, ties: r.ties, winPct: r.winPct,
         seasons, avgFor: s.avgFor, avgAgainst: s.avgAgainst, avgDiff: s.avgDiff,
-        avgFinish: f.avg, bestFinish: f.best, worstFinish: f.worst, titles: titleMap[owner] || 0
+        avgFinish: f.avg, bestFinish: f.best, worstFinish: f.worst, titles: titleMap[owner] || 0,
+        playoffsMade: p.made, playoffsKnown: p.known
       };
     });
 
-    // ---- Total career points scored (sum, not average) ----
-    const totalPointsMap = {};
-    careers.forEach(c => {
-      totalPointsMap[c.owner] = c.seasons
-        .filter(s => s.pointsFor != null)
-        .reduce((sum, s) => sum + s.pointsFor, 0);
-    });
-
     // ---- All-Time Power Rankings ----
-    // Blends career win %, championships, average finish, total points
-    // scored, and point differential into a single 0-100 score. Each
-    // factor is min-max normalized across the league first, so no
-    // single stat's raw scale (e.g. points in the thousands vs a
-    // 0-2 title count) can dominate just because its numbers are bigger.
-    const POWER_WEIGHTS = { winPct: 0.25, titles: 0.25, avgFinish: 0.25, totalPoints: 0.15, avgDiff: 0.10 };
+    // Blends career win %, championships, average finish, average
+    // points scored per season, and point differential into a single
+    // 0-100 score. Points and differential are per-season averages
+    // rather than career totals -- using totals would unfairly reward
+    // or penalize people just for having played more or fewer seasons
+    // (e.g. someone who left the league early would look weaker purely
+    // for having fewer cumulative points, even with a great average).
+    // Each factor is also min-max normalized across the league, so no
+    // single stat's raw scale (points in the hundreds vs a 0-2 title
+    // count) can dominate just because its numbers are bigger.
+    const POWER_WEIGHTS = { winPct: 0.25, titles: 0.25, avgFinish: 0.25, avgPoints: 0.15, avgDiff: 0.10 };
     const normalize = (value, min, max, invert) => {
       if (max === min) return 100;
       let n = (value - min) / (max - min) * 100;
@@ -2167,26 +2211,26 @@ function renderHistoryView() {
       winPct: r.winPct,
       titles: r.titles,
       avgFinish: r.avgFinish,
-      totalPoints: totalPointsMap[r.owner] || 0,
+      avgPoints: r.avgFor != null ? r.avgFor : 0,
       avgDiff: r.avgDiff != null ? r.avgDiff : 0
     }));
     const wpRange = rangeOf(powerInputs.map(p => p.winPct));
     const titleRange = rangeOf(powerInputs.map(p => p.titles));
     const finishRange = rangeOf(powerInputs.map(p => p.avgFinish != null ? p.avgFinish : 0));
-    const ptsRange = rangeOf(powerInputs.map(p => p.totalPoints));
+    const ptsRange = rangeOf(powerInputs.map(p => p.avgPoints));
     const diffRange = rangeOf(powerInputs.map(p => p.avgDiff));
 
     const powerRankings = powerInputs.map(p => {
       const winPctScore = normalize(p.winPct, wpRange.min, wpRange.max);
       const titlesScore = normalize(p.titles, titleRange.min, titleRange.max);
       const finishScore = p.avgFinish != null ? normalize(p.avgFinish, finishRange.min, finishRange.max, true) : 0;
-      const pointsScore = normalize(p.totalPoints, ptsRange.min, ptsRange.max);
+      const pointsScore = normalize(p.avgPoints, ptsRange.min, ptsRange.max);
       const diffScore = normalize(p.avgDiff, diffRange.min, diffRange.max);
       const powerScore =
         winPctScore * POWER_WEIGHTS.winPct +
         titlesScore * POWER_WEIGHTS.titles +
         finishScore * POWER_WEIGHTS.avgFinish +
-        pointsScore * POWER_WEIGHTS.totalPoints +
+        pointsScore * POWER_WEIGHTS.avgPoints +
         diffScore * POWER_WEIGHTS.avgDiff;
       return { ...p, powerScore };
     }).sort((a, b) => b.powerScore - a.powerScore);
@@ -2239,7 +2283,7 @@ function renderHistoryView() {
 
       <div class="hist-section">
         <h2 class="hist-section-head">All-Time Power Rankings</h2>
-        <p class="hist-section-sub">One score (0&ndash;100) blending career win % (25%), championships (25%), average finish (25%), total points scored (15%), and point differential (10%). Each factor is scaled against the rest of the league first, so titles carry as much weight as their share says, not just whichever number happens to be bigger.</p>
+        <p class="hist-section-sub">One score (0&ndash;100) blending career win % (25%), championships (25%), average finish (25%), average points scored per season (15%), and point differential (10%). Points and differential are per-season averages, not career totals, so someone with fewer seasons in the league isn't penalized just for that.</p>
         <div class="table-scroll" id="powerRankTable"></div>
       </div>
 
@@ -2264,7 +2308,7 @@ function renderHistoryView() {
         { key: "winPct", label: "Win %", numeric: true },
         { key: "titles", label: "\uD83C\uDFC6", numeric: true },
         { key: "avgFinish", label: "Avg Finish", numeric: true },
-        { key: "totalPoints", label: "Total Pts", numeric: true },
+        { key: "avgPoints", label: "Avg Pts", numeric: true },
         { key: "avgDiff", label: "Avg Diff", numeric: true }
       ],
       powerRankings,
@@ -2276,7 +2320,7 @@ function renderHistoryView() {
           <td class="num">${(p.winPct * 100).toFixed(1)}%</td>
           <td class="num">${p.titles ? `\uD83C\uDFC6&times;${p.titles}` : "\u2014"}</td>
           <td class="num">${p.avgFinish != null ? p.avgFinish.toFixed(2) : "\u2014"}</td>
-          <td class="num">${p.totalPoints.toFixed(0)}</td>
+          <td class="num">${p.avgPoints.toFixed(1)}</td>
           <td class="num ${p.avgDiff >= 0 ? "record-w" : "record-l"}">${p.avgDiff >= 0 ? "+" : ""}${p.avgDiff.toFixed(1)}</td>
         </tr>`,
       "powerScore", "desc"
@@ -2287,6 +2331,7 @@ function renderHistoryView() {
       [
         { key: "owner", label: "Owner" },
         { key: "titles", label: "\uD83C\uDFC6", numeric: true },
+        { key: "playoffsMade", label: "Playoffs", numeric: true },
         { key: "wins", label: "Record", numeric: true },
         { key: "winPct", label: "Win %", numeric: true },
         { key: "seasons", label: "Seasons", numeric: true },
@@ -2303,6 +2348,7 @@ function renderHistoryView() {
           <td class="rank">${i + 1}</td>
           <td class="team-name">${escapeHTML(r.owner)}</td>
           <td class="num">${r.titles ? `\uD83C\uDFC6&times;${r.titles}` : "\u2014"}</td>
+          <td class="num">${r.playoffsKnown ? `${r.playoffsMade}/${r.playoffsKnown}` : "\u2014"}</td>
           <td class="num"><span class="record-w">${r.wins}</span>-<span class="record-l">${r.losses}</span>${r.ties ? "-" + r.ties : ""}</td>
           <td class="num">${(r.winPct * 100).toFixed(1)}%</td>
           <td class="num">${r.seasons || "\u2014"}</td>
