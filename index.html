@@ -60,6 +60,27 @@
     color: var(--amber);
     margin: 0 0 10px;
   }
+  .league-switcher-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .league-switcher {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    background: var(--field-2);
+    color: var(--chalk);
+    border: 1px solid var(--turf-line);
+    border-radius: 999px;
+    padding: 6px 14px;
+    cursor: pointer;
+    margin-bottom: 10px;
+  }
+  .league-switcher:hover { border-color: rgba(203,161,53,0.5); }
+  .league-switcher:focus { outline: none; border-color: var(--amber); }
   h1.league-name {
     font-family: 'Big Shoulders Display', sans-serif; font-weight: 800;
     font-size: clamp(38px, 6vw, 64px);
@@ -484,7 +505,10 @@
 
 <div class="wrap">
   <header class="hero">
-    <p class="eyebrow">Fantasy Football &mdash; League HQ</p>
+    <div class="league-switcher-row">
+      <p class="eyebrow">Fantasy Football &mdash; League HQ</p>
+      <select class="league-switcher" id="leagueSwitcher"></select>
+    </div>
     <h1 class="league-name" id="leagueName">Loading League&hellip;</h1>
     <p class="league-sub" id="leagueSub">Pulling live data from Sleeper</p>
 
@@ -527,26 +551,14 @@
 
 <script>
 /* =========================================================
-   CONFIG
+   LEAGUE REGISTRY
+   Each league gets its own Sleeper league id, historical data
+   (pre-Sleeper seasons), champions list, and owner-name aliasing.
+   Switching leagues swaps these bindings and re-runs init().
    ========================================================= */
-const CONFIG = {
-  currentLeagueId: "1389327730440413184",
-  // Pre-Sleeper seasons (2018-2021). Fill these in once historical
-  // spreadsheets are parsed — see HISTORICAL_DATA below.
-  earliestTrackedSeason: 2018
-};
 
-/* =========================================================
-   HISTORICAL DATA (pre-2022, sourced from league spreadsheets)
-   Structure expected once populated:
-   {
-     2021: { teams: [ { owner, teamName, wins, losses, ties, pointsFor, pointsAgainst, finish } , ... ] },
-     2020: { ... }, 2019: { ... }, 2018: { ... }
-   }
-   Left empty until spreadsheets are supplied — the UI shows a
-   placeholder for any season with no entry here and no Sleeper data.
-   ========================================================= */
-const HISTORICAL_DATA = {
+// ---- League 1 historical data (from league spreadsheet) ----
+const HISTORICAL_DATA_LEAGUE1 = {
   // Champion-only years — regular-season records/points weren't kept
   // in a form we could recover for these two seasons.
   2018: { champion: "Morgan" },
@@ -592,9 +604,7 @@ const HISTORICAL_DATA = {
   }
 };
 
-// Champions by year, where known, shown as a badge on that season's
-// panel regardless of whether full standings are available.
-const CHAMPIONS = {
+const CHAMPIONS_LEAGUE1 = {
   2018: "Morgan", 2019: "Adam", 2020: "Daniel", 2021: "Morgan",
   2022: "Tim", 2023: "Logan", 2024: "Daniel", 2025: "Tim"
 };
@@ -603,9 +613,8 @@ const CHAMPIONS = {
 // spreadsheet's win/loss table. These six seasons overlap with what
 // Sleeper can also compute (2022-2025), so this is used as the
 // source of truth for that whole span instead of re-deriving it
-// from Sleeper — only seasons after 2025 get added from Sleeper on
-// top of this.
-const CAREER_RECORD_2020_2025 = {
+// from Sleeper — only seasons after 2025 get added from Sleeper.
+const CAREER_RECORD_OVERRIDE_LEAGUE1 = {
   Joey:   { wins: 48, losses: 35, ties: 0 },
   Morgan: { wins: 48, losses: 35, ties: 0 },
   Daniel: { wins: 45, losses: 38, ties: 0 },
@@ -619,6 +628,202 @@ const CAREER_RECORD_2020_2025 = {
   Justin: { wins: 37, losses: 46, ties: 0 },
   Dylan:  { wins: 34, losses: 50, ties: 0 }
 };
+
+const OWNER_ALIASES_LEAGUE1 = {
+  "gstv": "Joey",
+  "Pacfan8725": "Morgan",
+  "Packfan6725": "Morgan",
+  "djarboe": "Daniel",
+  "Jlanham0029": "JR",
+  "AyeTeeWhy": "Adam",
+  "austinmc20": "Austin",
+  "timothydawson": "Tim",
+  "wetdirt99": "Tyler",
+  "lmatt10": "Logan",
+  "FantasyCK": "Kurt",
+  "Justind82": "Justin",
+  "TopGunHatch": "Dylan"
+};
+
+// ---- League 2 historical data (from ESPN, 2018-2025) ----
+const HISTORICAL_DATA_LEAGUE2 = {
+  2018: {
+    champion: "Tyler Mudd",
+    teams: [
+      { owner: "Tyler Mudd", teamName: "Knockin' on  Evans Door", rank: 1, wins: 8, losses: 4, ties: 0, pointsFor: 1204.0, pointsAgainst: 1076.0 },
+      { owner: "Shalyne Walters", teamName: "Hit the Quon", rank: 2, wins: 8, losses: 4, ties: 0, pointsFor: 1332.0, pointsAgainst: 1078.0 },
+      { owner: "Timothy Dawson", teamName: "Show Me Your TDs", rank: 3, wins: 9, losses: 3, ties: 0, pointsFor: 1323.0, pointsAgainst: 1228.0 },
+      { owner: "Dustin Crane", teamName: "King of the North", rank: 4, wins: 9, losses: 3, ties: 0, pointsFor: 1146.0, pointsAgainst: 1072.0 },
+      { owner: "Matt Witt", teamName: "Tanking for Next Year", rank: 5, wins: 5, losses: 7, ties: 0, pointsFor: 1172.0, pointsAgainst: 1161.0 },
+      { owner: "Robert Daugherty", teamName: "Eat a bag of Diggs", rank: 6, wins: 4, losses: 7, ties: 1, pointsFor: 1085.0, pointsAgainst: 1184.0 },
+      { owner: "Joshua Stephenson", teamName: "CapitalsStanley Cup Champions", rank: 7, wins: 6, losses: 6, ties: 0, pointsFor: 1315.0, pointsAgainst: 1247.0 },
+      { owner: "Adam Young", teamName: "Timmy is  Garbage", rank: 8, wins: 4, losses: 8, ties: 0, pointsFor: 1078.0, pointsAgainst: 1234.0 },
+      { owner: "Ricky Hill", teamName: "AP's  Daycare", rank: 9, wins: 4, losses: 7, ties: 1, pointsFor: 1013.0, pointsAgainst: 1132.0 },
+      { owner: "TJ Glass", teamName: "Shalyne's  Strap-On", rank: 10, wins: 2, losses: 10, ties: 0, pointsFor: 831.0, pointsAgainst: 1087.0 },
+    ]
+  },
+  2019: {
+    champion: "Adam Young",
+    teams: [
+      { owner: "Adam Young", teamName: "Getting Metoo'd On E News", rank: 1, wins: 9, losses: 3, ties: 0, pointsFor: 1189.0, pointsAgainst: 1127.0 },
+      { owner: "Joshua Stephenson", teamName: "The Clintons Killed Eppstein", rank: 2, wins: 10, losses: 2, ties: 0, pointsFor: 1251.0, pointsAgainst: 1010.0 },
+      { owner: "Tyler Mudd", teamName: "Greg the leg  And the boys", rank: 3, wins: 10, losses: 2, ties: 0, pointsFor: 1348.0, pointsAgainst: 1020.0 },
+      { owner: "Robert Daugherty", teamName: "Nuke Hurricanes 2020", rank: 4, wins: 7, losses: 4, ties: 1, pointsFor: 1100.0, pointsAgainst: 1078.0 },
+      { owner: "TJ Glass", teamName: "Shalyne's  Strap-On", rank: 5, wins: 6, losses: 6, ties: 0, pointsFor: 1092.0, pointsAgainst: 1044.0 },
+      { owner: "Shalyne Walters", teamName: "Golladay Inn Express", rank: 6, wins: 3, losses: 9, ties: 0, pointsFor: 1047.0, pointsAgainst: 1291.0 },
+      { owner: "Timothy Dawson", teamName: "Cooking the Books", rank: 7, wins: 7, losses: 5, ties: 0, pointsFor: 1208.0, pointsAgainst: 1103.0 },
+      { owner: "Ricky Hill", teamName: "AP's  Daycare", rank: 8, wins: 2, losses: 10, ties: 0, pointsFor: 940.0, pointsAgainst: 1178.0 },
+      { owner: "Dustin Crane", teamName: "King of the North", rank: 9, wins: 2, losses: 10, ties: 0, pointsFor: 930.0, pointsAgainst: 1134.0 },
+      { owner: "Matt Witt", teamName: "Snell Ya In The Playoffs", rank: 10, wins: 3, losses: 8, ties: 1, pointsFor: 1089.0, pointsAgainst: 1209.0 },
+    ]
+  },
+  2020: {
+    champion: "Shalyne Walters",
+    teams: [
+      { owner: "Shalyne Walters", teamName: "JOEVID -  19", rank: 1, wins: 8, losses: 4, ties: 0, pointsFor: 1129.0, pointsAgainst: 1052.0 },
+      { owner: "Matt Witt", teamName: "Snell Ya In The Playoffs", rank: 2, wins: 9, losses: 3, ties: 0, pointsFor: 1316.0, pointsAgainst: 1069.0 },
+      { owner: "Timothy Dawson", teamName: "Cooking the Books", rank: 3, wins: 8, losses: 4, ties: 0, pointsFor: 1183.0, pointsAgainst: 1072.0 },
+      { owner: "Dustin Crane", teamName: "Pandemic Penguins", rank: 4, wins: 7, losses: 5, ties: 0, pointsFor: 1207.0, pointsAgainst: 1143.0 },
+      { owner: "Robert Daugherty", teamName: "Rub my  Chubb", rank: 5, wins: 6, losses: 6, ties: 0, pointsFor: 1067.0, pointsAgainst: 1108.0 },
+      { owner: "Joshua Stephenson", teamName: "The Clintons Killed Eppstein", rank: 6, wins: 5, losses: 7, ties: 0, pointsFor: 1096.0, pointsAgainst: 1113.0 },
+      { owner: "Ricky Hill", teamName: "AP's  Daycare", rank: 7, wins: 6, losses: 6, ties: 0, pointsFor: 1074.0, pointsAgainst: 1037.0 },
+      { owner: "Adam Young", teamName: "Barkleys Broken Boner Bros", rank: 8, wins: 1, losses: 11, ties: 0, pointsFor: 937.0, pointsAgainst: 1233.0 },
+      { owner: "Tyler Mudd", teamName: "Greg the leg  And the boys", rank: 9, wins: 6, losses: 6, ties: 0, pointsFor: 1260.0, pointsAgainst: 1262.0 },
+      { owner: "TJ Glass", teamName: "Shalyne’s Strap-On", rank: 10, wins: 4, losses: 8, ties: 0, pointsFor: 1036.0, pointsAgainst: 1216.0 },
+    ]
+  },
+  2021: {
+    champion: "Shalyne Walters",
+    teams: [
+      { owner: "Shalyne Walters", teamName: "Unsolicited Dak Pics", rank: 1, wins: 9, losses: 4, ties: 0, pointsFor: 1405.5, pointsAgainst: 1332.5 },
+      { owner: "Ricky Hill", teamName: "AP's  Daycare", rank: 2, wins: 7, losses: 6, ties: 0, pointsFor: 1481.5, pointsAgainst: 1368.5 },
+      { owner: "Dustin Crane", teamName: "Pandemic Penguins", rank: 3, wins: 7, losses: 6, ties: 0, pointsFor: 1436.0, pointsAgainst: 1311.0 },
+      { owner: "Timothy Dawson", teamName: "Cooking the Books", rank: 4, wins: 8, losses: 5, ties: 0, pointsFor: 1346.0, pointsAgainst: 1356.5 },
+      { owner: "Robert Daugherty", teamName: "Tucker Long  Dicked It", rank: 5, wins: 7, losses: 6, ties: 0, pointsFor: 1404.5, pointsAgainst: 1397.5 },
+      { owner: "TJ Glass", teamName: "Beasley's Anti- Vagcine Machine", rank: 6, wins: 6, losses: 7, ties: 0, pointsFor: 1353.0, pointsAgainst: 1373.5 },
+      { owner: "Matt Witt", teamName: "Snell Ya In The Playoffs", rank: 7, wins: 7, losses: 6, ties: 0, pointsFor: 1397.0, pointsAgainst: 1318.5 },
+      { owner: "Adam Young", teamName: "Team No Smooth Brain", rank: 8, wins: 3, losses: 10, ties: 0, pointsFor: 1297.0, pointsAgainst: 1509.0 },
+      { owner: "Tyler Mudd", teamName: "Sleepy Joe (Mixon)", rank: 9, wins: 6, losses: 7, ties: 0, pointsFor: 1393.0, pointsAgainst: 1447.5 },
+      { owner: "Joshua Stephenson", teamName: "Joe Biden Botched Anistan", rank: 10, wins: 5, losses: 8, ties: 0, pointsFor: 1246.0, pointsAgainst: 1345.0 },
+    ]
+  },
+  2022: {
+    champion: "Dustin Crane",
+    teams: [
+      { owner: "Dustin Crane", teamName: "Dimmsdale  Dimmadome", rank: 1, wins: 8, losses: 5, ties: 0, pointsFor: 1494.6, pointsAgainst: 1376.0 },
+      { owner: "Tyler Mudd", teamName: "Sleepy Joe (Mixon)", rank: 2, wins: 10, losses: 3, ties: 0, pointsFor: 1484.6, pointsAgainst: 1286.1 },
+      { owner: "Timothy Dawson", teamName: "Matt witt Is a cuc_k", rank: 3, wins: 8, losses: 5, ties: 0, pointsFor: 1456.5, pointsAgainst: 1351.9 },
+      { owner: "Adam Young", teamName: "Chattahoochee Slime Balls", rank: 4, wins: 8, losses: 5, ties: 0, pointsFor: 1451.4, pointsAgainst: 1416.1 },
+      { owner: "Ricky Hill", teamName: "AP's  Daycare", rank: 5, wins: 6, losses: 7, ties: 0, pointsFor: 1402.5, pointsAgainst: 1434.7 },
+      { owner: "Stuart Witt", teamName: "Stuarts Football Team", rank: 6, wins: 5, losses: 8, ties: 0, pointsFor: 1260.9, pointsAgainst: 1342.0 },
+      { owner: "Robert Daugherty", teamName: "Playoff  Lenny", rank: 7, wins: 5, losses: 8, ties: 0, pointsFor: 1389.2, pointsAgainst: 1515.2 },
+      { owner: "Matt Witt", teamName: "Snell Ya In The Playoffs", rank: 8, wins: 6, losses: 7, ties: 0, pointsFor: 1358.2, pointsAgainst: 1548.3 },
+      { owner: "Joshua Stephenson", teamName: "Joe Biden Botched Anistan", rank: 9, wins: 5, losses: 8, ties: 0, pointsFor: 1490.5, pointsAgainst: 1493.5 },
+      { owner: "TJ Glass", teamName: "DarkMAGA Incels DMI", rank: 10, wins: 4, losses: 9, ties: 0, pointsFor: 1290.4, pointsAgainst: 1315.0 },
+    ]
+  },
+  2023: {
+    champion: "Joshua Stephenson",
+    teams: [
+      { owner: "Joshua Stephenson", teamName: "Wagner group", rank: 1, wins: 8, losses: 5, ties: 0, pointsFor: 1520.0, pointsAgainst: 1367.3 },
+      { owner: "Tyler Mudd", teamName: "The Gay Communist", rank: 2, wins: 7, losses: 6, ties: 0, pointsFor: 1379.7, pointsAgainst: 1278.4 },
+      { owner: "Dustin Crane", teamName: "Dimmsdale  Dimmadome", rank: 3, wins: 8, losses: 5, ties: 0, pointsFor: 1458.8, pointsAgainst: 1434.7 },
+      { owner: "Robert Daugherty", teamName: "Watsons Massage Parlor", rank: 4, wins: 7, losses: 6, ties: 0, pointsFor: 1405.3, pointsAgainst: 1321.3 },
+      { owner: "Stuart Witt", teamName: "Stuarts Football Team", rank: 5, wins: 6, losses: 7, ties: 0, pointsFor: 1300.3, pointsAgainst: 1457.6 },
+      { owner: "TJ Glass", teamName: "Egg Slonkin Incels", rank: 6, wins: 7, losses: 6, ties: 0, pointsFor: 1358.7, pointsAgainst: 1404.3 },
+      { owner: "Timothy Dawson", teamName: "Matt witt Is a cuc_k", rank: 7, wins: 5, losses: 8, ties: 0, pointsFor: 1366.1, pointsAgainst: 1593.2 },
+      { owner: "Matt Witt", teamName: "Snell Ya In The Playoffs", rank: 8, wins: 6, losses: 6, ties: 1, pointsFor: 1298.6, pointsAgainst: 1301.2 },
+      { owner: "Ricky Hill", teamName: "AP's  Daycare", rank: 9, wins: 5, losses: 8, ties: 0, pointsFor: 1287.7, pointsAgainst: 1323.8 },
+      { owner: "Adam Young", teamName: "Chattahoochee Slime Balls", rank: 10, wins: 5, losses: 7, ties: 1, pointsFor: 1515.9, pointsAgainst: 1409.3 },
+    ]
+  },
+  2024: {
+    champion: "Ricky Hill",
+    teams: [
+      { owner: "Ricky Hill", teamName: "AP's  Daycare", rank: 1, wins: 10, losses: 3, ties: 0, pointsFor: 1537.7, pointsAgainst: 1373.0 },
+      { owner: "Joshua Stephenson", teamName: "Walz drinks horse bust", rank: 2, wins: 9, losses: 4, ties: 0, pointsFor: 1356.4, pointsAgainst: 1360.8 },
+      { owner: "Stuart Witt", teamName: "Stuarts Football Team", rank: 3, wins: 9, losses: 4, ties: 0, pointsFor: 1624.1, pointsAgainst: 1348.4 },
+      { owner: "Adam Young", teamName: "Gooning With The Boys", rank: 4, wins: 8, losses: 5, ties: 0, pointsFor: 1448.3, pointsAgainst: 1409.9 },
+      { owner: "Matt Witt", teamName: "Snell Ya In The Playoffs", rank: 5, wins: 6, losses: 7, ties: 0, pointsFor: 1526.1, pointsAgainst: 1458.0 },
+      { owner: "Dustin Crane", teamName: "Dimmsdale  Dimmadome", rank: 6, wins: 6, losses: 7, ties: 0, pointsFor: 1429.8, pointsAgainst: 1340.1 },
+      { owner: "Robert Daugherty", teamName: "Im Gonna RW myself", rank: 7, wins: 2, losses: 11, ties: 0, pointsFor: 1248.8, pointsAgainst: 1400.6 },
+      { owner: "Timothy Dawson", teamName: "Josh Is a cuc_k", rank: 8, wins: 8, losses: 5, ties: 0, pointsFor: 1391.3, pointsAgainst: 1419.3 },
+      { owner: "TJ Glass", teamName: "This team sucks", rank: 9, wins: 1, losses: 12, ties: 0, pointsFor: 1137.7, pointsAgainst: 1463.9 },
+      { owner: "Tyler Mudd", teamName: "The Gay Communist", rank: 10, wins: 6, losses: 7, ties: 0, pointsFor: 1339.0, pointsAgainst: 1465.2 },
+    ]
+  },
+  2025: {
+    champion: "Robert Daugherty",
+    teams: [
+      { owner: "Robert Daugherty", teamName: "Robert's Rowdy Team", rank: 1, wins: 9, losses: 4, ties: 0, pointsFor: 1521.7, pointsAgainst: 1298.9 },
+      { owner: "Timothy Dawson", teamName: "Josh Is a cuc_k", rank: 2, wins: 8, losses: 5, ties: 0, pointsFor: 1439.6, pointsAgainst: 1368.9 },
+      { owner: "Adam Young", teamName: "Squirts-Njigba", rank: 3, wins: 7, losses: 6, ties: 0, pointsFor: 1646.1, pointsAgainst: 1509.5 },
+      { owner: "Ricky Hill", teamName: "AP's  Daycare", rank: 4, wins: 8, losses: 5, ties: 0, pointsFor: 1463.0, pointsAgainst: 1317.3 },
+      { owner: "Dustin Crane", teamName: "Dimmsdale  Dimmadome", rank: 5, wins: 6, losses: 7, ties: 0, pointsFor: 1460.7, pointsAgainst: 1464.5 },
+      { owner: "Stuart Witt", teamName: "Stuarts Football Team", rank: 6, wins: 7, losses: 6, ties: 0, pointsFor: 1351.2, pointsAgainst: 1340.3 },
+      { owner: "TJ Glass", teamName: "Stephen Miller's Fakecels", rank: 7, wins: 3, losses: 10, ties: 0, pointsFor: 1200.9, pointsAgainst: 1478.7 },
+      { owner: "Tyler Mudd", teamName: "The Gay Communist", rank: 8, wins: 7, losses: 6, ties: 0, pointsFor: 1313.8, pointsAgainst: 1370.2 },
+      { owner: "Matt Witt", teamName: "IN Jones + The German Painter", rank: 9, wins: 6, losses: 7, ties: 0, pointsFor: 1353.9, pointsAgainst: 1411.4 },
+      { owner: "Joshua Stephenson", teamName: "H1-B Gone", rank: 10, wins: 4, losses: 9, ties: 0, pointsFor: 1179.7, pointsAgainst: 1370.9 },
+    ]
+  },
+};
+
+const CHAMPIONS_LEAGUE2 = {
+  2018: "Tyler Mudd",
+  2019: "Adam Young",
+  2020: "Shalyne Walters",
+  2021: "Shalyne Walters",
+  2022: "Dustin Crane",
+  2023: "Joshua Stephenson",
+  2024: "Ricky Hill",
+  2025: "Robert Daugherty",
+};
+
+// Not yet known — set once Sleeper display names for this league are
+// confirmed against the ESPN owner names above (same reconciliation
+// process used for League 1: usernames get added here as they're
+// found to differ from the historical name).
+const OWNER_ALIASES_LEAGUE2 = {};
+
+const LEAGUES = {
+  league1: {
+    key: "league1",
+    label: "The Original League",
+    currentLeagueId: "1389327730440413184",
+    earliestTrackedSeason: 2018,
+    historicalData: HISTORICAL_DATA_LEAGUE1,
+    champions: CHAMPIONS_LEAGUE1,
+    careerRecordOverride: CAREER_RECORD_OVERRIDE_LEAGUE1,
+    overrideYears: [2020, 2021, 2022, 2023, 2024, 2025],
+    ownerAliases: OWNER_ALIASES_LEAGUE1,
+    // Every member has been in this league since it started, so
+    // "seasons" in Career Stats means full league tenure for everyone.
+    uniformTenure: true
+  },
+  league2: {
+    key: "league2",
+    label: "Bush League",
+    currentLeagueId: "1399890288498991104",
+    earliestTrackedSeason: 2018,
+    historicalData: HISTORICAL_DATA_LEAGUE2,
+    champions: CHAMPIONS_LEAGUE2,
+    careerRecordOverride: {},
+    overrideYears: [],
+    ownerAliases: OWNER_ALIASES_LEAGUE2,
+    // This league has had real membership turnover (people have left
+    // and joined over the years), so "seasons" should reflect each
+    // person's actual number of seasons played, not a shared total.
+    uniformTenure: false
+  }
+};
+
+let ACTIVE_LEAGUE_KEY = "league1";
+let CONFIG = LEAGUES.league1;
+let HISTORICAL_DATA = LEAGUES.league1.historicalData;
+let CHAMPIONS = LEAGUES.league1.champions;
+let CAREER_RECORD_OVERRIDE = LEAGUES.league1.careerRecordOverride;
+let OWNER_ALIASES = LEAGUES.league1.ownerAliases;
 
 const API = "https://api.sleeper.app/v1";
 const state = {
@@ -686,7 +891,8 @@ async function buildSeasonChain() {
 // Maps Sleeper display names/usernames to the real names used in
 // league history (spreadsheet + champions), so career stats combine
 // correctly across both data sources instead of treating someone's
-// Sleeper handle as a separate person.
+// Sleeper handle as a separate person. See OWNER_ALIASES per league
+// in the LEAGUES registry above.
 // ---------------------------------------------------------------
 // 2026 PPR PLAYER VALUE RANKINGS
 // Consensus top-200 overall PPR rankings (Rotoworld/NBC Sports,
@@ -909,21 +1115,6 @@ function playerValue(name) {
   return PLAYER_VALUE_MAP[name.toLowerCase()] ?? 0.4;
 }
 
-const OWNER_ALIASES = {
-  "gstv": "Joey",
-  "Pacfan8725": "Morgan",
-  "Packfan6725": "Morgan",
-  "djarboe": "Daniel",
-  "Jlanham0029": "JR",
-  "AyeTeeWhy": "Adam",
-  "austinmc20": "Austin",
-  "timothydawson": "Tim",
-  "wetdirt99": "Tyler",
-  "lmatt10": "Logan",
-  "FantasyCK": "Kurt",
-  "Justind82": "Justin",
-  "TopGunHatch": "Dylan"
-};
 function canonicalOwner(name) {
   return OWNER_ALIASES[name] || name;
 }
@@ -1759,27 +1950,29 @@ function computeLeagueTenure() {
   return state.seasons.length - (currentInProgress ? 1 : 0);
 }
 
-function buildAllTimeRecordTable() {
+function buildAllTimeRecordTable(careers) {
   const records = {};
-  Object.entries(CAREER_RECORD_2020_2025).forEach(([owner, r]) => {
+  const overrideYears = new Set(CONFIG.overrideYears || []);
+
+  // A league can supply a cumulative override table for years where
+  // only a combined win/loss total was available (no per-season
+  // split) -- those years are skipped in the per-season sum below so
+  // they aren't double-counted. Leagues with full per-season records
+  // for every year (no override) just sum everything directly.
+  Object.entries(CAREER_RECORD_OVERRIDE || {}).forEach(([owner, r]) => {
     records[owner] = { owner, wins: r.wins, losses: r.losses, ties: r.ties };
   });
 
-  // Only seasons after 2025 get added from Sleeper — 2020-2025 already
-  // comes from the spreadsheet total above, so pulling those years from
-  // Sleeper too would double-count them.
-  state.seasons
-    .filter(s => s.season > 2025 && s.source === "sleeper")
-    .forEach(entry => {
-      const teams = state.cache[entry.season];
-      if (!teams) return;
-      teams.forEach(t => {
-        if (!records[t.owner]) records[t.owner] = { owner: t.owner, wins: 0, losses: 0, ties: 0 };
-        records[t.owner].wins += (t.wins || 0);
-        records[t.owner].losses += (t.losses || 0);
-        records[t.owner].ties += (t.ties || 0);
-      });
+  careers.forEach(c => {
+    if (!records[c.owner]) records[c.owner] = { owner: c.owner, wins: 0, losses: 0, ties: 0 };
+    c.seasons.forEach(s => {
+      if (overrideYears.has(s.season)) return;
+      if (s.wins == null) return; // synthetic champion-only entry, no record known
+      records[c.owner].wins += s.wins;
+      records[c.owner].losses += (s.losses || 0);
+      records[c.owner].ties += (s.ties || 0);
     });
+  });
 
   return Object.values(records).map(r => {
     const games = r.wins + r.losses + r.ties;
@@ -1788,7 +1981,7 @@ function buildAllTimeRecordTable() {
 }
 
 function buildCareerAggregates() {
-  const byOwner = {}; // owner -> { seasons: [{season, rank, pointsFor, pointsAgainst}], titles: [] }
+  const byOwner = {}; // owner -> { seasons: [{season, rank, pointsFor, pointsAgainst, wins, losses, ties}], titles: [] }
 
   const ensure = (owner) => {
     if (!byOwner[owner]) byOwner[owner] = { owner, seasons: [], titles: [] };
@@ -1804,7 +1997,8 @@ function buildCareerAggregates() {
           season: entry.season,
           rank: t.rank != null ? t.rank : (i + 1),
           pointsFor: t.pointsFor,
-          pointsAgainst: t.pointsAgainst
+          pointsAgainst: t.pointsAgainst,
+          wins: t.wins, losses: t.losses, ties: t.ties
         });
       });
     }
@@ -1831,7 +2025,7 @@ function buildCareerAggregates() {
 function renderHistoryView() {
   return ensureAllSeasonsLoaded().then(() => {
     const careers = buildCareerAggregates();
-    const records = buildAllTimeRecordTable();
+    const records = buildAllTimeRecordTable(careers);
 
     // ---- Championships ----
     const champs = careers
@@ -1867,9 +2061,14 @@ function renderHistoryView() {
       const r = recordMap[owner] || { wins: 0, losses: 0, ties: 0, winPct: 0 };
       const s = scoringMap[owner] || { seasons: 0, avgFor: null, avgAgainst: null, avgDiff: null };
       const f = finishMap[owner] || { avg: null, best: null, worst: null };
+      // Some leagues have had every member since day one, in which
+      // case "seasons" means league tenure; others have had real
+      // membership turnover, in which case it should reflect how
+      // many seasons that specific person actually played.
+      const seasons = CONFIG.uniformTenure ? leagueTenure : s.seasons;
       return {
         owner, wins: r.wins, losses: r.losses, ties: r.ties, winPct: r.winPct,
-        seasons: leagueTenure, avgFor: s.avgFor, avgAgainst: s.avgAgainst, avgDiff: s.avgDiff,
+        seasons, avgFor: s.avgFor, avgAgainst: s.avgAgainst, avgDiff: s.avgDiff,
         avgFinish: f.avg, bestFinish: f.best, worstFinish: f.worst, titles: titleMap[owner] || 0
       };
     });
@@ -2071,7 +2270,53 @@ function renderHistoryView() {
 }
 
 
+async function switchLeague(key) {
+  const league = LEAGUES[key];
+  if (!league) return;
+
+  ACTIVE_LEAGUE_KEY = key;
+  CONFIG = league;
+  HISTORICAL_DATA = league.historicalData;
+  CHAMPIONS = league.champions;
+  CAREER_RECORD_OVERRIDE = league.careerRecordOverride;
+  OWNER_ALIASES = league.ownerAliases;
+
+  // Reset all per-league state -- everything here is scoped to
+  // whichever league is active. state.playersStatic (the big NFL
+  // player database) is intentionally NOT reset since it isn't
+  // league-specific and is expensive to refetch.
+  state.seasons = [];
+  state.activeSeason = null;
+  state.activeSubView = "standings";
+  state.cache = {};
+  state.subCache = {};
+  historyLoaded = false;
+
+  // Reset the Season Standings / Historical Stats toggle back to
+  // Season Standings, and the view panels to match.
+  document.querySelectorAll(".toggle-btn").forEach(b => b.classList.toggle("active", b.dataset.view === "season"));
+  document.getElementById("seasonView").style.display = "";
+  document.getElementById("historyView").style.display = "none";
+
+  document.getElementById("leagueName").textContent = "Loading League\u2026";
+  document.getElementById("leagueSub").textContent = "Pulling live data from Sleeper";
+  document.getElementById("content").innerHTML = `<div class="loading-row">Fetching standings&hellip;</div>`;
+  document.getElementById("seasonSubNav").innerHTML = "";
+  document.getElementById("seasonTrack").innerHTML = "";
+
+  await init();
+}
+
+function renderLeagueSwitcher() {
+  const el = document.getElementById("leagueSwitcher");
+  if (!el) return;
+  el.innerHTML = Object.values(LEAGUES).map(l =>
+    `<option value="${l.key}"${l.key === ACTIVE_LEAGUE_KEY ? " selected" : ""}>${escapeHTML(l.label)}</option>`
+  ).join("");
+}
+
 async function init() {
+  renderLeagueSwitcher();
   try {
     state.seasons = await buildSeasonChain();
   } catch (e) {
@@ -2099,6 +2344,9 @@ async function init() {
 }
 
 init();
+document.getElementById("leagueSwitcher").addEventListener("change", (e) => {
+  switchLeague(e.target.value);
+});
 </script>
 </body>
 </html>
