@@ -8,17 +8,20 @@
 <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --field: #17151E;
-    --field-2: #221E2C;
-    --field-3: #3D2E5C;
+    --field: #161E1A;
+    --field-2: #212B24;
+    --field-3: #34463A;
     --chalk: #EFEAF7;
     --chalk-dim: #9A91B0;
     --amber: #CBA135;
     --amber-dim: #8F7326;
-    --turf-line: rgba(239,234,247,0.12);
+    --turf-line: rgba(224,232,220,0.12);
     --loss-red: #C1667A;
     --win-green: #7CB88F;
     --ink: #16121C;
+    --glow-1: rgba(203,161,53,0.14);
+    --glow-2: rgba(90,150,110,0.18);
+    --accent-2: rgba(110,180,135,0.5);
     --radius: 6px;
   }
 
@@ -48,8 +51,8 @@
     position: absolute;
     inset: 0;
     background:
-      radial-gradient(ellipse at 15% -10%, rgba(203,161,53,0.14), transparent 50%),
-      radial-gradient(ellipse at 85% 10%, rgba(124,90,196,0.16), transparent 55%);
+      radial-gradient(ellipse at 15% -10%, var(--glow-1), transparent 50%),
+      radial-gradient(ellipse at 85% 10%, var(--glow-2), transparent 55%);
     pointer-events: none;
   }
   .eyebrow {
@@ -314,7 +317,7 @@
     cursor: pointer;
     transition: border-color 0.15s ease, color 0.15s ease;
   }
-  .sub-tab-btn:hover:not(.active) { color: var(--chalk); border-color: rgba(124,90,196,0.5); }
+  .sub-tab-btn:hover:not(.active) { color: var(--chalk); border-color: var(--accent-2); }
   .sub-tab-btn.active { color: var(--ink); background: var(--amber); border-color: var(--amber); font-weight: 700; }
 
   /* ---------- HISTORICAL STATS ---------- */
@@ -647,6 +650,21 @@ const OWNER_ALIASES_LEAGUE1 = {
 
 // ---- League 2 historical data (from ESPN, 2018-2025) ----
 const HISTORICAL_DATA_LEAGUE2 = {
+  2017: {
+    champion: "Joshua Stephenson",
+    teams: [
+      { owner: "Joshua Stephenson", teamName: "MAGAGod Emperor  Trump Lord", rank: 1, wins: 6, losses: 6, ties: 0, pointsFor: 1150.0, pointsAgainst: 1140.0 },
+      { owner: "Adam Young", teamName: "Roy Kidd  2020", rank: 2, wins: 6, losses: 6, ties: 0, pointsFor: 1059.0, pointsAgainst: 1051.0 },
+      { owner: "Shalyne Walters", teamName: "Brees  and Brews", rank: 3, wins: 6, losses: 5, ties: 1, pointsFor: 1155.0, pointsAgainst: 1027.0 },
+      { owner: "Tyler Mudd", teamName: "Knockin' on  Evans Door", rank: 4, wins: 7, losses: 4, ties: 1, pointsFor: 1077.0, pointsAgainst: 967.0 },
+      { owner: "Matt Witt", teamName: "The Great White Hopes", rank: 5, wins: 6, losses: 6, ties: 0, pointsFor: 1069.0, pointsAgainst: 949.0 },
+      { owner: "Ricky Hill", teamName: "AP's  Daycare", rank: 6, wins: 5, losses: 6, ties: 1, pointsFor: 990.0, pointsAgainst: 1082.0 },
+      { owner: "TJ Glass", teamName: "Shalyne's  Strap-On", rank: 7, wins: 5, losses: 7, ties: 0, pointsFor: 952.0, pointsAgainst: 1018.0 },
+      { owner: "Dustin Crane", teamName: "Team Crane", rank: 8, wins: 6, losses: 6, ties: 0, pointsFor: 1000.0, pointsAgainst: 1067.0 },
+      { owner: "Robert Daugherty", teamName: "Cant stump Trump", rank: 9, wins: 6, losses: 6, ties: 0, pointsFor: 995.0, pointsAgainst: 1056.0 },
+      { owner: "Timothy Dawson", teamName: "Show Me Your TDs", rank: 10, wins: 5, losses: 6, ties: 1, pointsFor: 990.0, pointsAgainst: 1080.0 },
+    ]
+  },
   2018: {
     champion: "Tyler Mudd",
     teams: [
@@ -770,6 +788,7 @@ const HISTORICAL_DATA_LEAGUE2 = {
 };
 
 const CHAMPIONS_LEAGUE2 = {
+  2017: "Joshua Stephenson",
   2018: "Tyler Mudd",
   2019: "Adam Young",
   2020: "Shalyne Walters",
@@ -780,11 +799,24 @@ const CHAMPIONS_LEAGUE2 = {
   2025: "Robert Daugherty",
 };
 
-// Not yet known — set once Sleeper display names for this league are
-// confirmed against the ESPN owner names above (same reconciliation
-// process used for League 1: usernames get added here as they're
-// found to differ from the historical name).
-const OWNER_ALIASES_LEAGUE2 = {};
+// Maps this league's Sleeper usernames to the real names used in the
+// ESPN historical data, so career stats combine correctly instead of
+// treating someone's Sleeper handle as a separate person. Shalyne
+// Walters has no Sleeper account (left the league before the move)
+// so she's absent from live seasons but still shows up in the
+// historical years she actually played.
+const OWNER_ALIASES_LEAGUE2 = {
+  "timothydawson": "Timothy Dawson",
+  "wetdirt99": "Tyler Mudd",
+  "dustincrane": "Dustin Crane",
+  "ABowlofStu": "Stuart Witt",
+  "JStephenson0773": "Joshua Stephenson",
+  "Jimwitt": "Matt Witt",
+  "Richardwhill25": "Ricky Hill",
+  "rdaugherty": "Robert Daugherty",
+  "AyeTeeWhy": "Adam Young",
+  "TJG2010": "TJ Glass"
+};
 
 const LEAGUES = {
   league1: {
@@ -799,13 +831,19 @@ const LEAGUES = {
     ownerAliases: OWNER_ALIASES_LEAGUE1,
     // Every member has been in this league since it started, so
     // "seasons" in Career Stats means full league tenure for everyone.
-    uniformTenure: true
+    uniformTenure: true,
+    theme: {
+      field: "#161E1A", field2: "#212B24", field3: "#34463A",
+      turfLine: "rgba(224,232,220,0.12)",
+      glow1: "rgba(203,161,53,0.14)", glow2: "rgba(90,150,110,0.18)",
+      accent2: "rgba(110,180,135,0.5)"
+    }
   },
   league2: {
     key: "league2",
     label: "Bush League",
     currentLeagueId: "1399890288498991104",
-    earliestTrackedSeason: 2018,
+    earliestTrackedSeason: 2017,
     historicalData: HISTORICAL_DATA_LEAGUE2,
     champions: CHAMPIONS_LEAGUE2,
     careerRecordOverride: {},
@@ -814,9 +852,29 @@ const LEAGUES = {
     // This league has had real membership turnover (people have left
     // and joined over the years), so "seasons" should reflect each
     // person's actual number of seasons played, not a shared total.
-    uniformTenure: false
+    uniformTenure: false,
+    theme: {
+      field: "#131722", field2: "#1C2434", field3: "#2A3550",
+      turfLine: "rgba(220,226,240,0.12)",
+      glow1: "rgba(203,161,53,0.14)", glow2: "rgba(90,120,200,0.18)",
+      accent2: "rgba(110,150,220,0.5)"
+    }
   }
 };
+
+function applyTheme(key) {
+  const t = LEAGUES[key] && LEAGUES[key].theme;
+  if (!t) return;
+  const root = document.documentElement.style;
+  root.setProperty("--field", t.field);
+  root.setProperty("--field-2", t.field2);
+  root.setProperty("--field-3", t.field3);
+  root.setProperty("--turf-line", t.turfLine);
+  root.setProperty("--glow-1", t.glow1);
+  root.setProperty("--glow-2", t.glow2);
+  root.setProperty("--accent-2", t.accent2);
+}
+
 
 let ACTIVE_LEAGUE_KEY = "league1";
 let CONFIG = LEAGUES.league1;
@@ -2280,6 +2338,7 @@ async function switchLeague(key) {
   CHAMPIONS = league.champions;
   CAREER_RECORD_OVERRIDE = league.careerRecordOverride;
   OWNER_ALIASES = league.ownerAliases;
+  applyTheme(key);
 
   // Reset all per-league state -- everything here is scoped to
   // whichever league is active. state.playersStatic (the big NFL
@@ -2343,6 +2402,7 @@ async function init() {
   }
 }
 
+applyTheme(ACTIVE_LEAGUE_KEY);
 init();
 document.getElementById("leagueSwitcher").addEventListener("change", (e) => {
   switchLeague(e.target.value);
