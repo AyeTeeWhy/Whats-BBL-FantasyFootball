@@ -1174,7 +1174,16 @@ function playerValue(name) {
 }
 
 function canonicalOwner(name) {
-  return OWNER_ALIASES[name] || name;
+  if (!name) return name;
+  // Case-insensitive lookup — Sleeper usernames get typed/remembered
+  // with inconsistent casing, so match loosely rather than requiring
+  // an exact-case key in OWNER_ALIASES.
+  if (OWNER_ALIASES[name]) return OWNER_ALIASES[name];
+  const lower = name.toLowerCase();
+  for (const key in OWNER_ALIASES) {
+    if (key.toLowerCase() === lower) return OWNER_ALIASES[key];
+  }
+  return name;
 }
 
 async function computeSleeperStandings(entry) {
