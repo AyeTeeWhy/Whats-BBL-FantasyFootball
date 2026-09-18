@@ -320,6 +320,30 @@
   .sub-tab-btn:hover:not(.active) { color: var(--chalk); border-color: var(--accent-2); }
   .sub-tab-btn.active { color: var(--ink); background: var(--amber); border-color: var(--amber); font-weight: 700; }
 
+  .roster-refresh-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .roster-refresh-row .panel-note { flex: 1 1 320px; }
+  .refresh-btn {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.05em;
+    background: var(--field-2);
+    color: var(--chalk);
+    border: 1px solid var(--turf-line);
+    border-radius: 999px;
+    padding: 6px 14px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color 0.15s ease;
+  }
+  .refresh-btn:hover:not(:disabled) { border-color: var(--amber); color: var(--amber); }
+  .refresh-btn:disabled { opacity: 0.6; cursor: default; }
+
   /* ---------- HISTORICAL STATS ---------- */
   #historyView { padding: 36px 0 80px; }
   .hist-section { margin-bottom: 44px; }
@@ -1390,17 +1414,126 @@ function escapeHTML(str) {
    value table above, using the league's real starting lineup
    requirements to separate starter strength from bench depth.
    ========================================================= */
-async function renderRosterRankings(entry) {
+// ---------------------------------------------------------------
+// LIVE IN-SEASON PLAYER VALUES
+// Replaces the static preseason rankings with real season-to-date
+// fantasy points once games have actually been played, computed
+// from Sleeper's own weekly stats using the league's real scoring
+// settings (so it matches this league's actual PPR rules exactly,
+// not a generic assumption). Players who haven't recorded a game
+// yet fall back to the preseason rank so the tool stays usable
+// early in the season and for byes/injuries. Cached per season;
+// pass forceRefresh to recompute from scratch.
+// ---------------------------------------------------------------
+async function buildLiveValueMap(entry, forceRefresh) {
+  const season = entry.season;
+  state.subCache[season] = state.subCache[season] || {};
+  if (state.subCache[season].liveValueMap && !forceRefresh) {
+    return state.subCache[season].liveValueMap;
+  }
+
+  const result = { map: {}, weekUsed: 0, live: false, weeksWithData: 0, error: false };
+  try {
+    const league = entry.leagueMeta || await getJSON(`${API}/league/${entry.leagueId}`);
+    const scoringSettings = league.scoring_settings || {};
+    const nflState = await getJSON(`${API}/state/nfl`);
+    const currentWeek = currentFantasyWeek(nflState);
+
+    if (!state.playersStatic) {
+      state.playersStatic = await getJSON(`${API}/players/nfl`);
+    }
+    const playersDb = state.playersStatic;
+
+    const totalPoints = {};
+    const gamesPlayed = {};
+    let weeksWithData = 0;
+
+    for (let wk = 1; wk <= currentWeek; wk++) {
+      let weekStats;
+      try {
+        weekStats = await getJSON(`${API}/stats/nfl/regular/${season}/${wk}`);
+      } catch (e) { continue; }
+      if (!weekStats || !Object.keys(weekStats).length) continue;
+
+      let anyRealStats = false;
+      Object.entries(weekStats).forEach(([pid, stats]) => {
+        if (!stats || typeof stats !== "object") return;
+        const keys = Object.keys(stats);
+        if (!keys.length) return;
+        let pts = 0;
+        keys.forEach(k => {
+          const mult = scoringSettings[k];
+          if (mult) pts += (stats[k] || 0) * mult;
+        });
+        totalPoints[pid] = (totalPoints[pid] || 0) + pts;
+        gamesPlayed[pid] = (gamesPlayed[pid] || 0) + 1;
+        anyRealStats = true;
+      });
+      if (anyRealStats) weeksWithData++;
+    }
+
+    const livePpg = [];
+    Object.keys(totalPoints).forEach(pid => {
+      const gp = gamesPlayed[pid] || 0;
+      if (gp <= 0) return;
+      const p = playersDb[pid];
+      if (!p || !["QB", "RB", "WR", "TE"].includes(p.position)) return;
+      const name = [p.first_name, p.last_name].filter(Boolean).join(" ");
+      if (!name) return;
+      livePpg.push({ name, ppg: totalPoints[pid] / gp });
+    });
+    livePpg.sort((a, b) => b.ppg - a.ppg);
+
+    // Unified ranking: proven performers first (by points per game
+    // actually scored), then anyone who hasn't played yet in their
+    // original preseason order -- same decay curve applied to
+    // whichever ranking is in effect, so the scale never mismatches.
+    const seen = new Set(livePpg.map(p => p.name.toLowerCase()));
+    const unified = livePpg.map(p => p.name);
+    PLAYER_RANKS_2026.forEach(([rank, name]) => {
+      const key = name.toLowerCase();
+      if (!seen.has(key)) { unified.push(name); seen.add(key); }
+    });
+
+    const map = {};
+    unified.forEach((name, i) => { map[name.toLowerCase()] = 100 * Math.pow(0.977, i); });
+
+    result.map = map;
+    result.weekUsed = currentWeek;
+    result.weeksWithData = weeksWithData;
+    result.live = weeksWithData > 0;
+  } catch (e) {
+    result.map = PLAYER_VALUE_MAP;
+    result.live = false;
+    result.error = true;
+  }
+
+  state.subCache[season].liveValueMap = result;
+  return result;
+}
+
+function valueFromMap(map, name) {
+  if (!name) return 0.4;
+  return map[name.toLowerCase()] ?? 0.4;
+}
+
+async function renderRosterRankings(entry, forceRefresh) {
   const content = document.getElementById("content");
   const season = entry.season;
   state.subCache[season] = state.subCache[season] || {};
 
+  if (forceRefresh) {
+    state.subCache[season].roster = null;
+    state.subCache[season].liveValueMap = null;
+  }
+
   if (!state.subCache[season].roster) {
     try {
       const league = entry.leagueMeta || await getJSON(`${API}/league/${entry.leagueId}`);
-      const [users, rosters] = await Promise.all([
+      const [users, rosters, valueResult] = await Promise.all([
         getJSON(`${API}/league/${entry.leagueId}/users`),
-        getJSON(`${API}/league/${entry.leagueId}/rosters`)
+        getJSON(`${API}/league/${entry.leagueId}/rosters`),
+        buildLiveValueMap(entry, forceRefresh)
       ]);
 
       // The full NFL player database is ~5MB and only needed here
@@ -1410,6 +1543,7 @@ async function renderRosterRankings(entry) {
         state.playersStatic = await getJSON(`${API}/players/nfl`);
       }
       const playersDb = state.playersStatic;
+      const valueMap = valueResult.map;
 
       const userMap = {};
       users.forEach(u => { userMap[u.user_id] = u; });
@@ -1427,7 +1561,7 @@ async function renderRosterRankings(entry) {
           const p = playersDb[pid];
           const name = p ? [p.first_name, p.last_name].filter(Boolean).join(" ") : null;
           const position = p ? p.position : "?";
-          return { name: name || "Unknown", position, value: playerValue(name) };
+          return { name: name || "Unknown", position, value: valueFromMap(valueMap, name) };
         }).filter(p => ["QB", "RB", "WR", "TE"].includes(p.position));
 
         // Greedily fill required starter slots with the highest-value
@@ -1470,6 +1604,7 @@ async function renderRosterRankings(entry) {
       });
 
       state.subCache[season].roster = teams;
+      state.subCache[season].rosterValueInfo = valueResult;
     } catch (e) {
       state.subCache[season].roster = null;
     }
@@ -1501,8 +1636,17 @@ async function renderRosterRankings(entry) {
     `<strong>${escapeHTML(ranked[ranked.length - 1].owner)}</strong> ranks last in roster strength right now &mdash; not a death sentence this early, but worth monitoring through waivers.`
   ];
 
+  const valueInfo = state.subCache[season].rosterValueInfo || { live: false, weekUsed: 0 };
+  const freshnessNote = valueInfo.live
+    ? `Live through Week ${valueInfo.weekUsed} &mdash; players who haven't recorded a game yet still use preseason rank.`
+    : `Preseason rankings &mdash; no games played yet this season.`;
+
   content.innerHTML = `
-    <p class="panel-note" style="margin-bottom:6px;display:block;">Scores each team's actual roster against 2026 PPR consensus rankings (Rotoworld, updated 8/24) &mdash; starters count in full, bench depth counts partially. Click any column to sort.</p>
+    <div class="roster-refresh-row">
+      <p class="panel-note" style="display:block;">Scores each team's actual roster using real season stats where available, preseason rank as fallback &mdash; starters count in full, bench depth counts partially. Click any column to sort.</p>
+      <button class="refresh-btn" id="rosterRefreshBtn" title="Re-pull rosters and recompute from the latest stats">&#8635; Refresh</button>
+    </div>
+    <p class="panel-note" style="margin-bottom:14px;display:block;">${freshnessNote}</p>
     <div class="table-scroll" id="rosterRankTable" style="margin-bottom:20px;"></div>
     <div class="hist-section" style="margin-bottom:0;">
       <h2 class="hist-section-head" style="font-size:17px;">Notes</h2>
@@ -1511,6 +1655,11 @@ async function renderRosterRankings(entry) {
       </ul>
     </div>
   `;
+  document.getElementById("rosterRefreshBtn").addEventListener("click", async (e) => {
+    e.target.disabled = true;
+    e.target.textContent = "Refreshing\u2026";
+    await renderRosterRankings(entry, true);
+  });
 
   paintSortableTable(
     document.getElementById("rosterRankTable"),
