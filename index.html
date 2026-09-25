@@ -1893,7 +1893,8 @@ async function computePlayoffOdds(entry, playoffSpots) {
       owner: canonicalOwner(u.display_name || "Unknown"),
       teamName: (u.metadata && u.metadata.team_name) || u.display_name || "Unknown Team",
       wins, losses, ties, pointsFor,
-      avgPoints: gp ? pointsFor / gp : null
+      avgPoints: gp ? pointsFor / gp : null,
+      weekly: []
     };
   });
   const known = Object.values(teamsByRoster).filter(t => t.avgPoints != null).map(t => t.avgPoints);
@@ -1903,6 +1904,30 @@ async function computePlayoffOdds(entry, playoffSpots) {
   const currentWeek = currentFantasyWeek(nflState);
   const league = entry.leagueMeta || {};
   const lastRegularWeek = (league.settings && league.settings.playoff_week_start) ? league.settings.playoff_week_start - 1 : 14;
+
+  // Pull each team's actual weekly scores for completed weeks so the
+  // simulation can weight recent form the same way the in-season
+  // Power Rankings do, rather than treating Week 1 the same as last
+  // week's performance.
+  for (let wk = 1; wk < currentWeek; wk++) {
+    let wkMatchups;
+    try { wkMatchups = await getJSON(`${API}/league/${entry.leagueId}/matchups/${wk}`); } catch (e) { continue; }
+    if (!wkMatchups || !wkMatchups.length) continue;
+    const anyPoints = wkMatchups.some(m => (m.points || 0) > 0);
+    if (!anyPoints) continue;
+    wkMatchups.forEach(m => {
+      if (teamsByRoster[m.roster_id]) teamsByRoster[m.roster_id].weekly.push(m.points || 0);
+    });
+  }
+  Object.values(teamsByRoster).forEach(t => {
+    const last3 = t.weekly.slice(-3);
+    const recentForm = last3.length ? last3.reduce((a, b) => a + b, 0) / last3.length : null;
+    // Blend season-long average with recent form (same "hot/cold"
+    // signal the in-season Power Rankings use) so a team's projected
+    // performance reflects how they're playing lately, not just their
+    // average across the whole season so far.
+    t.projectedMean = recentForm != null ? (t.avgPoints * 0.5 + recentForm * 0.5) : t.avgPoints;
+  });
 
   const remainingWeeksMatchups = [];
   for (let wk = currentWeek; wk <= lastRegularWeek; wk++) {
@@ -1946,8 +1971,8 @@ async function computePlayoffOdds(entry, playoffSpots) {
       pairs.forEach(([ridA, ridB]) => {
         const a = teamsByRoster[ridA], b = teamsByRoster[ridB];
         if (!a || !b) return;
-        const scoreA = Math.max(0, gaussianRandom(a.avgPoints, a.avgPoints * 0.18));
-        const scoreB = Math.max(0, gaussianRandom(b.avgPoints, b.avgPoints * 0.18));
+        const scoreA = Math.max(0, gaussianRandom(a.projectedMean, a.projectedMean * 0.18));
+        const scoreB = Math.max(0, gaussianRandom(b.projectedMean, b.projectedMean * 0.18));
         simState[ridA].pointsFor += scoreA;
         simState[ridB].pointsFor += scoreB;
         if (scoreA > scoreB) { simState[ridA].wins++; simState[ridB].losses++; }
@@ -2007,7 +2032,7 @@ async function renderPlayoffPicture(entry, forceRefresh) {
   const rowsWithOdds = rows.map(r => ({ ...r, playoffPct: oddsInfo.odds[r.owner] != null ? oddsInfo.odds[r.owner] : null }));
 
   const oddsNote = oddsInfo.simulated
-    ? `Playoff % is a Monte Carlo simulation (2,000 runs) of the remaining ${oddsInfo.weeksRemaining} week${oddsInfo.weeksRemaining !== 1 ? "s" : ""}, using each team's current scoring average with ~18% week-to-week variance assumed &mdash; a reasonable rule of thumb, not a measured number for this league.`
+    ? `Playoff % is a Monte Carlo simulation (2,000 runs) of the remaining ${oddsInfo.weeksRemaining} week${oddsInfo.weeksRemaining !== 1 ? "s" : ""}, projecting each team from a blend of their season scoring average and last-3-week form (the same "hot/cold" signal behind Power Rankings), with ~18% week-to-week variance assumed &mdash; a reasonable rule of thumb, not a measured number for this league.`
     : `Playoff % reflects only the current standing &mdash; no remaining schedule was found to simulate (season may be over, or the schedule isn't published yet).`;
 
   content.innerHTML = `
