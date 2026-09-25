@@ -1858,9 +1858,127 @@ function simulateResult(teams, ownerKey, delta, playoffSpots) {
   return me;
 }
 
-async function renderPlayoffPicture(entry) {
+/* =========================================================
+   PLAYOFF ODDS (Monte Carlo simulation)
+   Simulates the rest of the season thousands of times using each
+   team's current scoring average, and reports what share of those
+   simulations end with them inside the playoff cutoff.
+   ========================================================= */
+function gaussianRandom(mean, stddev) {
+  let u = 0, v = 0;
+  while (u === 0) u = Math.random();
+  while (v === 0) v = Math.random();
+  const z = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  return mean + z * stddev;
+}
+
+async function computePlayoffOdds(entry, playoffSpots) {
+  const [users, rosters, nflState] = await Promise.all([
+    getJSON(`${API}/league/${entry.leagueId}/users`),
+    getJSON(`${API}/league/${entry.leagueId}/rosters`),
+    getJSON(`${API}/state/nfl`)
+  ]);
+  const userMap = {};
+  users.forEach(u => { userMap[u.user_id] = u; });
+
+  const teamsByRoster = {};
+  rosters.forEach(r => {
+    const u = userMap[r.owner_id] || {};
+    const s = r.settings || {};
+    const wins = s.wins || 0, losses = s.losses || 0, ties = s.ties || 0;
+    const pointsFor = (s.fpts || 0) + (s.fpts_decimal || 0) / 100;
+    const gp = wins + losses + ties;
+    teamsByRoster[r.roster_id] = {
+      rosterId: r.roster_id,
+      owner: canonicalOwner(u.display_name || "Unknown"),
+      teamName: (u.metadata && u.metadata.team_name) || u.display_name || "Unknown Team",
+      wins, losses, ties, pointsFor,
+      avgPoints: gp ? pointsFor / gp : null
+    };
+  });
+  const known = Object.values(teamsByRoster).filter(t => t.avgPoints != null).map(t => t.avgPoints);
+  const leagueAvg = known.length ? known.reduce((a, b) => a + b, 0) / known.length : 100;
+  Object.values(teamsByRoster).forEach(t => { if (t.avgPoints == null) t.avgPoints = leagueAvg; });
+
+  const currentWeek = currentFantasyWeek(nflState);
+  const league = entry.leagueMeta || {};
+  const lastRegularWeek = (league.settings && league.settings.playoff_week_start) ? league.settings.playoff_week_start - 1 : 14;
+
+  const remainingWeeksMatchups = [];
+  for (let wk = currentWeek; wk <= lastRegularWeek; wk++) {
+    let m;
+    try { m = await getJSON(`${API}/league/${entry.leagueId}/matchups/${wk}`); } catch (e) { continue; }
+    if (!m || !m.length) continue;
+    const byMatchup = {};
+    m.forEach(x => {
+      if (x.matchup_id == null) return;
+      byMatchup[x.matchup_id] = byMatchup[x.matchup_id] || [];
+      byMatchup[x.matchup_id].push(x.roster_id);
+    });
+    const pairs = Object.values(byMatchup).filter(p => p.length === 2);
+    if (pairs.length) remainingWeeksMatchups.push(pairs);
+  }
+
+  const odds = {};
+  if (!remainingWeeksMatchups.length) {
+    // No remaining schedule found (season over, or not yet published) --
+    // odds collapse to simply whether a team is currently in or out.
+    const order = computePlayoffOrder(Object.values(teamsByRoster), playoffSpots);
+    order.forEach(t => { odds[t.owner] = t.status === "In" ? 100 : 0; });
+    return { odds, simulated: false, weeksRemaining: 0 };
+  }
+
+  // Each simulated game draws a score for both teams from a normal
+  // distribution around their season scoring average (assumed ~18%
+  // week-to-week variance, a reasonable rule of thumb for fantasy
+  // scoring rather than a measured value for this specific league).
+  const SIMULATIONS = 2000;
+  const madePlayoffs = {};
+  Object.values(teamsByRoster).forEach(t => { madePlayoffs[t.owner] = 0; });
+
+  for (let sim = 0; sim < SIMULATIONS; sim++) {
+    const simState = {};
+    Object.values(teamsByRoster).forEach(t => {
+      simState[t.rosterId] = { wins: t.wins, losses: t.losses, ties: t.ties, pointsFor: t.pointsFor };
+    });
+
+    remainingWeeksMatchups.forEach(pairs => {
+      pairs.forEach(([ridA, ridB]) => {
+        const a = teamsByRoster[ridA], b = teamsByRoster[ridB];
+        if (!a || !b) return;
+        const scoreA = Math.max(0, gaussianRandom(a.avgPoints, a.avgPoints * 0.18));
+        const scoreB = Math.max(0, gaussianRandom(b.avgPoints, b.avgPoints * 0.18));
+        simState[ridA].pointsFor += scoreA;
+        simState[ridB].pointsFor += scoreB;
+        if (scoreA > scoreB) { simState[ridA].wins++; simState[ridB].losses++; }
+        else if (scoreB > scoreA) { simState[ridB].wins++; simState[ridA].losses++; }
+        else { simState[ridA].ties++; simState[ridB].ties++; }
+      });
+    });
+
+    const finalTeams = Object.keys(simState).map(rid => ({
+      owner: teamsByRoster[rid].owner,
+      wins: simState[rid].wins, losses: simState[rid].losses, ties: simState[rid].ties,
+      pointsFor: simState[rid].pointsFor
+    }));
+    computePlayoffOrder(finalTeams, playoffSpots).forEach(t => {
+      if (t.status === "In") madePlayoffs[t.owner]++;
+    });
+  }
+
+  Object.keys(madePlayoffs).forEach(owner => { odds[owner] = (madePlayoffs[owner] / SIMULATIONS) * 100; });
+  return { odds, simulated: true, weeksRemaining: remainingWeeksMatchups.length };
+}
+
+async function renderPlayoffPicture(entry, forceRefresh) {
   const content = document.getElementById("content");
   const season = entry.season;
+  state.subCache[season] = state.subCache[season] || {};
+
+  if (forceRefresh) {
+    state.cache[season] = null;
+    state.subCache[season].playoffOdds = null;
+  }
 
   let teams = state.cache[season];
   if (!teams || !teams.length) {
@@ -1878,7 +1996,33 @@ async function renderPlayoffPicture(entry) {
   const playoffSpots = (league.settings && league.settings.playoff_teams) || 6;
   const rows = computePlayoffOrder(teams, playoffSpots);
 
-  content.innerHTML = `<p class="panel-note" style="margin-bottom:14px;display:block;">Top ${playoffSpots} make the playoffs &middot; current order by record, then points for</p><div class="table-scroll" id="playoffTable"></div>`;
+  if (!state.subCache[season].playoffOdds) {
+    try {
+      state.subCache[season].playoffOdds = await computePlayoffOdds(entry, playoffSpots);
+    } catch (e) {
+      state.subCache[season].playoffOdds = { odds: {}, simulated: false, weeksRemaining: 0, error: true };
+    }
+  }
+  const oddsInfo = state.subCache[season].playoffOdds;
+  const rowsWithOdds = rows.map(r => ({ ...r, playoffPct: oddsInfo.odds[r.owner] != null ? oddsInfo.odds[r.owner] : null }));
+
+  const oddsNote = oddsInfo.simulated
+    ? `Playoff % is a Monte Carlo simulation (2,000 runs) of the remaining ${oddsInfo.weeksRemaining} week${oddsInfo.weeksRemaining !== 1 ? "s" : ""}, using each team's current scoring average with ~18% week-to-week variance assumed &mdash; a reasonable rule of thumb, not a measured number for this league.`
+    : `Playoff % reflects only the current standing &mdash; no remaining schedule was found to simulate (season may be over, or the schedule isn't published yet).`;
+
+  content.innerHTML = `
+    <div class="roster-refresh-row">
+      <p class="panel-note" style="display:block;">Top ${playoffSpots} make the playoffs &middot; current order by record, then points for.</p>
+      <button class="refresh-btn" id="playoffRefreshBtn" title="Re-pull standings and re-run the simulation">&#8635; Refresh</button>
+    </div>
+    <p class="panel-note" style="margin-bottom:14px;display:block;">${oddsNote}</p>
+    <div class="table-scroll" id="playoffTable"></div>`;
+
+  document.getElementById("playoffRefreshBtn").addEventListener("click", async (e) => {
+    e.target.disabled = true;
+    e.target.textContent = "Refreshing\u2026";
+    await renderPlayoffPicture(entry, true);
+  });
 
   paintSortableTable(
     document.getElementById("playoffTable"),
@@ -1887,10 +2031,11 @@ async function renderPlayoffPicture(entry) {
       { key: "owner", label: "Owner" },
       { key: "wins", label: "Record", numeric: true },
       { key: "pointsFor", label: "Pts For", numeric: true },
+      { key: "playoffPct", label: "Playoff %", numeric: true },
       { key: "status", label: "Status" },
       { key: "back", label: "Back" }
     ],
-    rows,
+    rowsWithOdds,
     (r, i) => `
       <tr${r.isCutoff ? ' style="border-bottom: 2px solid var(--amber);"' : ""}>
         <td class="rank">${r.rank}</td>
@@ -1898,10 +2043,11 @@ async function renderPlayoffPicture(entry) {
         <td class="owner">${escapeHTML(r.owner)}</td>
         <td class="num"><span class="record-w">${r.wins}</span>-<span class="record-l">${r.losses}</span>${r.ties ? "-" + r.ties : ""}</td>
         <td class="num">${r.pointsFor.toFixed(1)}</td>
+        <td class="num" style="color: var(--amber); font-family: 'IBM Plex Mono', monospace;">${r.playoffPct != null ? r.playoffPct.toFixed(1) + "%" : "\u2014"}</td>
         <td class="num ${r.status === "In" ? "record-w" : "record-l"}">${r.status}</td>
         <td class="num">${r.back}</td>
       </tr>`,
-    "wins", "desc"
+    "playoffPct", "desc"
   );
 }
 
@@ -2116,7 +2262,7 @@ async function selectSubView(entry, view) {
     return;
   }
   if (view === "playoff") {
-    content.innerHTML = `<div class="loading-row">Checking the standings&hellip;</div>`;
+    content.innerHTML = `<div class="loading-row">Simulating the rest of the season&hellip;</div>`;
     await renderPlayoffPicture(entry);
     return;
   }
