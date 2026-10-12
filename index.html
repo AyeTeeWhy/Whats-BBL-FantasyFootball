@@ -449,6 +449,70 @@
   .table-scroll { width: 100%; overflow-x: auto; }
 
   /* ---------- WEEKLY MATCHUPS ---------- */
+  .matchup-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    gap: 20px;
+    align-items: start;
+  }
+  .whatif-panel {
+    position: sticky;
+    top: 16px;
+    border: 1px solid var(--turf-line);
+    border-radius: var(--radius);
+    background: var(--field-2);
+    padding: 16px 16px 8px;
+  }
+  .wi-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .wi-title {
+    font-family: 'Big Shoulders Display', sans-serif; font-weight: 800;
+    text-transform: uppercase;
+    font-size: 18px;
+    margin: 0;
+  }
+  .wi-sub {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--chalk-dim);
+    margin: 6px 0 10px;
+  }
+  .wi-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .wi-table tr { border-bottom: 1px solid rgba(239,234,247,0.06); }
+  .wi-table td { padding: 7px 4px; vertical-align: middle; }
+  .wi-rank { font-family: 'Big Shoulders Display', sans-serif; font-weight: 800; color: var(--amber-dim); width: 22px; font-size: 15px; }
+  .wi-move { font-family: 'IBM Plex Mono', monospace; font-size: 11px; width: 34px; }
+  .wi-flat { color: var(--chalk-dim); }
+  .wi-team { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .wi-rec, .wi-status { font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; white-space: nowrap; text-align: right; }
+  .wi-tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 1px 5px;
+    border-radius: 3px;
+    border: 1px solid var(--turf-line);
+  }
+  .wi-tag-in { color: var(--win-green); border-color: var(--win-green); }
+  .wi-tag-out { color: var(--loss-red); border-color: var(--loss-red); }
+  .pick-btn {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    background: transparent;
+    color: var(--chalk-dim);
+    border: 1px solid var(--turf-line);
+    border-radius: 999px;
+    padding: 5px 14px;
+    margin-top: 10px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  }
+  .pick-btn:hover:not(.selected) { color: var(--chalk); border-color: var(--amber); }
+  .pick-btn.selected { background: var(--amber); border-color: var(--amber); color: var(--ink); font-weight: 700; }
+  .pick-btn.lost { opacity: 0.55; }
   .matchup-grid { display: flex; flex-direction: column; gap: 16px; }
   .matchup-card {
     border: 1px solid var(--turf-line);
@@ -517,12 +581,16 @@
   }
   .mi-line { line-height: 1.8; }
 
+  @media (max-width: 900px) {
+    .matchup-layout { grid-template-columns: 1fr; }
+    .whatif-panel { position: static; }
+  }
   @media (max-width: 640px) {
 
     .scoreboard-strip { grid-template-columns: repeat(2, 1fr); }
     table.standings { font-size: 12.5px; }
     td.owner { display: none; }
-    .matchup-teams { grid-template-columns: 1fr; gap: 4px; }
+    .matchup-teams { grid-template-columns: 1fr; gap: 14px; }
     .matchup-vs { display: none; }
     .matchup-implications { grid-template-columns: 1fr; gap: 12px; }
   }
@@ -2140,7 +2208,7 @@ async function renderWeeklyMatchups(entry) {
       return;
     }
 
-    const cardsHTML = pairs.map(([a, b]) => {
+    const cardsHTML = pairs.map(([a, b], idx) => {
       const aWin = simulateResult(standingsTeams, a.owner, { wins: 1 }, playoffSpots);
       const aLose = simulateResult(standingsTeams, a.owner, { losses: 1 }, playoffSpots);
       const bWin = simulateResult(standingsTeams, b.owner, { wins: 1 }, playoffSpots);
@@ -2169,18 +2237,20 @@ async function renderWeeklyMatchups(entry) {
         </div>`;
 
       return `
-        <div class="matchup-card">
+        <div class="matchup-card" data-idx="${idx}">
           <div class="matchup-teams">
             <div class="matchup-team">
               <div class="mt-name">${escapeHTML(a.teamName)}</div>
               <div class="mt-owner">${escapeHTML(a.owner)}</div>
               <div class="mt-record">${a.wins}-${a.losses}${a.ties ? "-" + a.ties : ""}${hasLivePoints ? ` &middot; ${a.points.toFixed(1)} pts` : ""}</div>
+              <button class="pick-btn" data-idx="${idx}" data-side="0">Pick win</button>
             </div>
             <div class="matchup-vs">VS</div>
             <div class="matchup-team">
               <div class="mt-name">${escapeHTML(b.teamName)}</div>
               <div class="mt-owner">${escapeHTML(b.owner)}</div>
               <div class="mt-record">${b.wins}-${b.losses}${b.ties ? "-" + b.ties : ""}${hasLivePoints ? ` &middot; ${b.points.toFixed(1)} pts` : ""}</div>
+              <button class="pick-btn" data-idx="${idx}" data-side="1">Pick win</button>
             </div>
           </div>
           <div class="matchup-headline">${headline}</div>
@@ -2196,10 +2266,93 @@ async function renderWeeklyMatchups(entry) {
       : `<p class="panel-note" style="margin-bottom:14px;display:block;">Tip: visit Roster Rankings first to factor roster strength into these headlines.</p>`;
 
     content.innerHTML = `
-      <p class="panel-note" style="margin-bottom:14px;display:block;">Week ${week} matchups &middot; win/loss shows where each team would land in the playoff picture if the result held today</p>
+      <p class="panel-note" style="margin-bottom:14px;display:block;">Week ${week} matchups &middot; pick a winner in any matchup to see how the standings would shift, or read each team's win/loss scenario below its card.</p>
       ${rosterNote}
-      <div class="matchup-grid">${cardsHTML}</div>
+      <div class="matchup-layout">
+        <div class="matchup-grid">${cardsHTML}</div>
+        <aside class="whatif-panel" id="whatIfPanel"></aside>
+      </div>
     `;
+
+    // ---- What-if picks: choose a winner per matchup, see projected standings ----
+    const picks = {}; // matchup index -> owner picked to win
+
+    function syncCardButtons(idx) {
+      const [a, b] = pairs[idx];
+      const picked = picks[idx];
+      content.querySelectorAll(`.pick-btn[data-idx="${idx}"]`).forEach(btn => {
+        const team = pairs[idx][Number(btn.dataset.side)];
+        btn.classList.remove("selected", "lost");
+        if (!picked) { btn.textContent = "Pick win"; return; }
+        if (picked === team.owner) { btn.classList.add("selected"); btn.textContent = "\u2713 Wins"; }
+        else { btn.classList.add("lost"); btn.textContent = "Loses"; }
+      });
+    }
+
+    function renderWhatIf() {
+      const panel = document.getElementById("whatIfPanel");
+      const projected = standingsTeams.map(t => ({ ...t }));
+      let pickCount = 0;
+      pairs.forEach(([a, b], idx) => {
+        const winner = picks[idx];
+        if (!winner) return;
+        pickCount++;
+        const loser = winner === a.owner ? b.owner : a.owner;
+        projected.find(t => t.owner === winner).wins++;
+        projected.find(t => t.owner === loser).losses++;
+      });
+
+      const before = {};
+      computePlayoffOrder(standingsTeams, playoffSpots).forEach(t => { before[t.owner] = t; });
+      const after = computePlayoffOrder(projected, playoffSpots);
+
+      const rows = after.map(t => {
+        const was = before[t.owner];
+        const delta = was.rank - t.rank;
+        let moveHTML = `<span class="wi-flat">\u2014</span>`;
+        if (delta > 0) moveHTML = `<span class="record-w">\u25B2${delta}</span>`;
+        else if (delta < 0) moveHTML = `<span class="record-l">\u25BC${Math.abs(delta)}</span>`;
+        let statusHTML = `<span class="${t.status === "In" ? "record-w" : "record-l"}">${t.status}</span>`;
+        if (t.status !== was.status) {
+          statusHTML += t.status === "In" ? ` <span class="wi-tag wi-tag-in">new</span>` : ` <span class="wi-tag wi-tag-out">out</span>`;
+        }
+        return `
+          <tr${t.isCutoff ? ' style="border-bottom: 2px solid var(--amber);"' : ""}>
+            <td class="wi-rank">${t.rank}</td>
+            <td class="wi-move">${moveHTML}</td>
+            <td class="wi-team" title="${escapeHTML(t.owner)}">${escapeHTML(t.teamName)}</td>
+            <td class="wi-rec">${t.wins}-${t.losses}${t.ties ? "-" + t.ties : ""}</td>
+            <td class="wi-status">${statusHTML}</td>
+          </tr>`;
+      }).join("");
+
+      panel.innerHTML = `
+        <div class="wi-head">
+          <h3 class="wi-title">Projected standings</h3>
+          <button class="refresh-btn" id="whatIfReset"${pickCount ? "" : " disabled"}>Reset</button>
+        </div>
+        <p class="wi-sub">${pickCount} of ${pairs.length} matchup${pairs.length !== 1 ? "s" : ""} picked &middot; top ${playoffSpots} make the playoffs. Ties in record fall back to points scored so far.</p>
+        <table class="wi-table"><tbody>${rows}</tbody></table>
+      `;
+      document.getElementById("whatIfReset").addEventListener("click", () => {
+        Object.keys(picks).forEach(k => delete picks[k]);
+        pairs.forEach((_, i) => syncCardButtons(i));
+        renderWhatIf();
+      });
+    }
+
+    content.querySelectorAll(".pick-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const idx = Number(btn.dataset.idx);
+        const owner = pairs[idx][Number(btn.dataset.side)].owner;
+        if (picks[idx] === owner) delete picks[idx];
+        else picks[idx] = owner;
+        syncCardButtons(idx);
+        renderWhatIf();
+      });
+    });
+
+    renderWhatIf();
   } catch (e) {
     content.innerHTML = `<div class="placeholder-box"><strong>Couldn't load this week's matchups</strong>Check your connection and try again.</div>`;
   }
