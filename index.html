@@ -929,6 +929,10 @@ const LEAGUES = {
     // whatever the league's actual current Sleeper playoff_teams
     // setting is, since that rarely changes format year to year.
     historicalPlayoffSpots: null,
+    // Sleeper's playoff_teams setting reports 4 for this league, but 6
+    // teams actually make the playoffs -- pin it so the cutoff line,
+    // playoff odds and playoff-appearance counts all use 6.
+    playoffSpotsOverride: 6,
     theme: {
       field: "#161E1A", field2: "#212B24", field3: "#34463A",
       turfLine: "rgba(224,232,220,0.12)",
@@ -953,6 +957,7 @@ const LEAGUES = {
     // Real value from ESPN's settings for every year 2017-2025 (the
     // league has always taken its top 4 teams to the playoffs).
     historicalPlayoffSpots: 4,
+    playoffSpotsOverride: null,
     theme: {
       field: "#131722", field2: "#1C2434", field3: "#2A3550",
       turfLine: "rgba(220,226,240,0.12)",
@@ -1008,6 +1013,15 @@ async function getJSON(url) {
 // completely different (and already-scheduled) fantasy week's
 // matchups. Fantasy weeks only mean anything once the regular
 // season (or postseason) is underway; anything else is week 1.
+// How many teams make the playoffs. A league can pin this explicitly
+// (playoffSpotsOverride) when Sleeper's own setting doesn't match how
+// the league actually plays; otherwise it comes from Sleeper.
+function getPlayoffSpots(entry) {
+  if (CONFIG.playoffSpotsOverride) return CONFIG.playoffSpotsOverride;
+  const s = entry && entry.leagueMeta && entry.leagueMeta.settings;
+  return (s && s.playoff_teams) || 6;
+}
+
 function currentFantasyWeek(nflState) {
   if (!nflState) return 1;
   if (nflState.season_type === "regular" || nflState.season_type === "post") {
@@ -1940,6 +1954,38 @@ function gaussianRandom(mean, stddev) {
   return mean + z * stddev;
 }
 
+// Magic-number style numbers per team. "certain" flags only use
+// airtight bounds (nothing a simulation could get wrong); the win
+// targets come from the simulated seasons.
+function buildCushion(teams, gamesLeft, spots, clinchK, aliveK) {
+  const out = {};
+  teams.forEach(t => {
+    const R = gamesLeft[t.owner] || 0;
+    const maxWins = t.wins + R;
+    const others = teams.filter(o => o.owner !== t.owner);
+    // Eliminated for sure: enough other teams already have more wins
+    // than this team could possibly finish with.
+    const aboveForSure = others.filter(o => o.wins > maxWins).length;
+    // Clinched for sure: so few other teams can even match this
+    // team's current win total that they can't fill every spot.
+    const canReach = others.filter(o => o.wins + (gamesLeft[o.owner] || 0) >= t.wins).length;
+    let cert = null;
+    if (aboveForSure >= spots) cert = "eliminated";
+    else if (canReach <= spots - 1) cert = "clinched";
+
+    let lockNeed = null;
+    if (clinchK != null) {
+      const need = Math.max(0, clinchK - t.wins);
+      lockNeed = need <= R ? need : null;
+    }
+    let canLose = aliveK != null ? R - Math.max(0, aliveK - t.wins) : R;
+    if (cert === "clinched") lockNeed = 0;
+    if (cert === "eliminated") canLose = -1;
+    out[t.owner] = { gamesLeft: R, lockNeed, canLose, cert };
+  });
+  return out;
+}
+
 async function computePlayoffOdds(entry, playoffSpots) {
   const [users, rosters, nflState] = await Promise.all([
     getJSON(`${API}/league/${entry.leagueId}/users`),
@@ -2018,7 +2064,8 @@ async function computePlayoffOdds(entry, playoffSpots) {
     // odds collapse to simply whether a team is currently in or out.
     const order = computePlayoffOrder(Object.values(teamsByRoster), playoffSpots);
     order.forEach(t => { odds[t.owner] = t.status === "In" ? 100 : 0; });
-    return { odds, simulated: false, weeksRemaining: 0 };
+    const cushion = buildCushion(Object.values(teamsByRoster), {}, playoffSpots, null, null);
+    return { odds, simulated: false, weeksRemaining: 0, cushion, clinchWins: null, aliveWins: null };
   }
 
   // Each simulated game draws a score for both teams from a normal
@@ -2028,6 +2075,17 @@ async function computePlayoffOdds(entry, playoffSpots) {
   const SIMULATIONS = 2000;
   const madePlayoffs = {};
   Object.values(teamsByRoster).forEach(t => { madePlayoffs[t.owner] = 0; });
+
+  // Remaining games per team, and (across every simulated season) how
+  // often a given final win total was good enough to make the playoffs.
+  const gamesLeft = {};
+  remainingWeeksMatchups.forEach(pairs => pairs.forEach(([ridA, ridB]) => {
+    [ridA, ridB].forEach(rid => {
+      const t = teamsByRoster[rid];
+      if (t) gamesLeft[t.owner] = (gamesLeft[t.owner] || 0) + 1;
+    });
+  }));
+  const seenByWins = {}, madeByWins = {};
 
   for (let sim = 0; sim < SIMULATIONS; sim++) {
     const simState = {};
@@ -2055,12 +2113,31 @@ async function computePlayoffOdds(entry, playoffSpots) {
       pointsFor: simState[rid].pointsFor
     }));
     computePlayoffOrder(finalTeams, playoffSpots).forEach(t => {
-      if (t.status === "In") madePlayoffs[t.owner]++;
+      seenByWins[t.wins] = (seenByWins[t.wins] || 0) + 1;
+      if (t.status === "In") {
+        madePlayoffs[t.owner]++;
+        madeByWins[t.wins] = (madeByWins[t.wins] || 0) + 1;
+      }
     });
   }
 
   Object.keys(madePlayoffs).forEach(owner => { odds[owner] = (madePlayoffs[owner] / SIMULATIONS) * 100; });
-  return { odds, simulated: true, weeksRemaining: remainingWeeksMatchups.length };
+
+  // Win totals ranked low to high: the first one that made the
+  // playoffs 95%+ of the time is the "lock" number, and the first one
+  // that made it at least 1% of the time is the "still alive" floor.
+  // Totals seen fewer than 30 times are ignored as too noisy.
+  const totals = Object.keys(seenByWins).map(Number).filter(k => seenByWins[k] >= 30).sort((a, b) => a - b);
+  const pMake = k => (madeByWins[k] || 0) / seenByWins[k];
+  const clinchK = totals.find(k => pMake(k) >= 0.95);
+  const aliveK = totals.find(k => pMake(k) >= 0.01);
+  const cushion = buildCushion(Object.values(teamsByRoster), gamesLeft, playoffSpots,
+    clinchK != null ? clinchK : null, aliveK != null ? aliveK : null);
+
+  return {
+    odds, simulated: true, weeksRemaining: remainingWeeksMatchups.length,
+    cushion, clinchWins: clinchK != null ? clinchK : null, aliveWins: aliveK != null ? aliveK : null
+  };
 }
 
 async function renderPlayoffPicture(entry, forceRefresh) {
@@ -2085,8 +2162,7 @@ async function renderPlayoffPicture(entry, forceRefresh) {
     }
   }
 
-  const league = entry.leagueMeta || {};
-  const playoffSpots = (league.settings && league.settings.playoff_teams) || 6;
+  const playoffSpots = getPlayoffSpots(entry);
   const rows = computePlayoffOrder(teams, playoffSpots);
 
   if (!state.subCache[season].playoffOdds) {
@@ -2097,7 +2173,22 @@ async function renderPlayoffPicture(entry, forceRefresh) {
     }
   }
   const oddsInfo = state.subCache[season].playoffOdds;
-  const rowsWithOdds = rows.map(r => ({ ...r, playoffPct: oddsInfo.odds[r.owner] != null ? oddsInfo.odds[r.owner] : null }));
+  const cushionMap = oddsInfo.cushion || {};
+  const rowsWithOdds = rows.map(r => {
+    const c = cushionMap[r.owner] || {};
+    return {
+      ...r,
+      playoffPct: oddsInfo.odds[r.owner] != null ? oddsInfo.odds[r.owner] : null,
+      gamesLeft: c.gamesLeft != null ? c.gamesLeft : null,
+      lockNeed: c.cert === "clinched" ? 0 : (c.lockNeed != null ? c.lockNeed : null),
+      canLose: c.canLose != null ? c.canLose : null,
+      cert: c.cert || null
+    };
+  });
+
+  const targetNote = (oddsInfo.simulated && oddsInfo.clinchWins != null)
+    ? `Rule of thumb from the simulations: about <strong>${oddsInfo.clinchWins} wins</strong> locks up a spot${oddsInfo.aliveWins != null ? `, and about <strong>${oddsInfo.aliveWins} wins</strong> keeps a realistic path alive` : ""}. <strong>Wins to lock</strong> = more wins a team needs to reach the lock number (&ldquo;&mdash;&rdquo; if they can't get there). <strong>Can lose</strong> = remaining games they can drop and still have a path. Clinched/Eliminated are only shown when mathematically certain.`
+    : `Clinched/Eliminated are only shown when mathematically certain.`;
 
   const oddsNote = oddsInfo.simulated
     ? `Playoff % is a Monte Carlo simulation (2,000 runs) of the remaining ${oddsInfo.weeksRemaining} week${oddsInfo.weeksRemaining !== 1 ? "s" : ""}, projecting each team from a blend of their season scoring average and last-3-week form (the same "hot/cold" signal behind Power Rankings), with ~18% week-to-week variance assumed &mdash; a reasonable rule of thumb, not a measured number for this league.`
@@ -2108,7 +2199,8 @@ async function renderPlayoffPicture(entry, forceRefresh) {
       <p class="panel-note" style="display:block;">Top ${playoffSpots} make the playoffs &middot; current order by record, then points for.</p>
       <button class="refresh-btn" id="playoffRefreshBtn" title="Re-pull standings and re-run the simulation">&#8635; Refresh</button>
     </div>
-    <p class="panel-note" style="margin-bottom:14px;display:block;">${oddsNote}</p>
+    <p class="panel-note" style="margin-bottom:8px;display:block;">${oddsNote}</p>
+    <p class="panel-note" style="margin-bottom:14px;display:block;">${targetNote}</p>
     <div class="table-scroll" id="playoffTable"></div>`;
 
   document.getElementById("playoffRefreshBtn").addEventListener("click", async (e) => {
@@ -2125,6 +2217,9 @@ async function renderPlayoffPicture(entry, forceRefresh) {
       { key: "wins", label: "Record", numeric: true },
       { key: "pointsFor", label: "Pts For", numeric: true },
       { key: "playoffPct", label: "Playoff %", numeric: true },
+      { key: "gamesLeft", label: "Left", numeric: true },
+      { key: "lockNeed", label: "Wins to lock", numeric: true },
+      { key: "canLose", label: "Can lose", numeric: true },
       { key: "status", label: "Status" },
       { key: "back", label: "Back" }
     ],
@@ -2137,6 +2232,9 @@ async function renderPlayoffPicture(entry, forceRefresh) {
         <td class="num"><span class="record-w">${r.wins}</span>-<span class="record-l">${r.losses}</span>${r.ties ? "-" + r.ties : ""}</td>
         <td class="num">${r.pointsFor.toFixed(1)}</td>
         <td class="num" style="color: var(--amber); font-family: 'IBM Plex Mono', monospace;">${r.playoffPct != null ? r.playoffPct.toFixed(1) + "%" : "\u2014"}</td>
+        <td class="num">${r.gamesLeft != null ? r.gamesLeft : "\u2014"}</td>
+        <td class="num ${r.cert === "clinched" ? "record-w" : ""}">${r.cert === "clinched" ? "\u2713 Clinched" : (r.cert === "eliminated" || r.lockNeed == null ? "\u2014" : r.lockNeed)}</td>
+        <td class="num ${r.cert === "eliminated" || (r.canLose != null && r.canLose < 0) ? "record-l" : ""}" title="${r.cert === "eliminated" ? "Mathematically eliminated" : (r.canLose != null && r.canLose < 0 ? "Not mathematically out, but under 1% in the simulations even winning out" : "Remaining games this team can lose and still have a path")}">${r.cert === "eliminated" ? "Eliminated" : (r.cert === "clinched" ? "\u2014" : (r.canLose == null ? "\u2014" : (r.canLose < 0 ? "Long shot" : r.canLose)))}</td>
         <td class="num ${r.status === "In" ? "record-w" : "record-l"}">${r.status}</td>
         <td class="num">${r.back}</td>
       </tr>`,
@@ -2181,8 +2279,7 @@ async function renderWeeklyMatchups(entry) {
       };
     });
 
-    const league = entry.leagueMeta || {};
-    const playoffSpots = (league.settings && league.settings.playoff_teams) || 6;
+    const playoffSpots = getPlayoffSpots(entry);
     const standingsTeams = Object.values(rosterInfo);
 
     // Roster Rankings scores are reused if that tab has already been
@@ -2505,13 +2602,13 @@ function buildPlayoffAppearances(careers) {
   // otherwise fall back to whatever the league's current Sleeper
   // playoff_teams setting is (format rarely changes year to year).
   const sleeperEntries = state.seasons.filter(s => s.source === "sleeper" && s.leagueMeta && s.leagueMeta.settings);
-  const liveFallback = sleeperEntries.length ? (sleeperEntries[sleeperEntries.length - 1].leagueMeta.settings.playoff_teams || null) : null;
+  const liveFallback = sleeperEntries.length ? getPlayoffSpots(sleeperEntries[sleeperEntries.length - 1]) : null;
 
   const spotsForSeason = {};
   state.seasons.forEach(entry => {
     let spots = null;
     if (entry.source === "sleeper" && entry.leagueMeta && entry.leagueMeta.settings) {
-      spots = entry.leagueMeta.settings.playoff_teams || null;
+      spots = getPlayoffSpots(entry);
     } else if (CONFIG.historicalPlayoffSpots != null) {
       spots = CONFIG.historicalPlayoffSpots;
     } else {
