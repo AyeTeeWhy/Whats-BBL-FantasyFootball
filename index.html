@@ -362,6 +362,21 @@
     margin: 0 0 14px;
   }
 
+  .money-pos { color: var(--win-green); }
+  .money-neg { color: var(--loss-red); }
+  .prize-cell small { display: block; color: var(--chalk-dim); font-size: 11px; }
+  .prize-cell.empty { color: var(--chalk-dim); }
+  .hist-subhead {
+    font-family: 'Big Shoulders Display', sans-serif; font-weight: 800;
+    text-transform: uppercase; font-size: 15px; letter-spacing: 0.04em;
+    color: var(--chalk); margin: 22px 0 8px;
+  }
+  .prize-summary {
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--chalk-dim);
+    margin: 0 0 12px; line-height: 1.6;
+  }
+  .prize-summary b { color: var(--chalk); font-weight: 600; }
+
   .record-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -447,6 +462,72 @@
   }
   .years-list { color: var(--chalk-dim); font-size: 12px; font-family: 'IBM Plex Mono', monospace; }
   .table-scroll { width: 100%; overflow-x: auto; }
+
+  /* ---------- ROSTERS VIEW ---------- */
+  .rv-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 14px;
+    align-items: start;
+  }
+  .rv-card {
+    border: 1px solid var(--turf-line);
+    border-radius: var(--radius);
+    background: var(--field-2);
+    overflow: hidden;
+  }
+  .rv-card summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 14px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .rv-card summary::-webkit-details-marker { display: none; }
+  .rv-team {
+    font-family: 'Big Shoulders Display', sans-serif; font-weight: 800;
+    text-transform: uppercase;
+    font-size: 18px;
+    line-height: 1.1;
+  }
+  .rv-owner { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--chalk-dim); margin-top: 3px; }
+  .rv-record { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--amber); white-space: nowrap; }
+  .rv-body { padding: 0 16px 12px; border-top: 1px solid var(--turf-line); }
+  .rv-pos {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--chalk-dim);
+    margin: 12px 0 4px;
+  }
+  .rv-player {
+    display: grid;
+    grid-template-columns: 14px minmax(0, 1fr) auto auto;
+    gap: 8px;
+    align-items: baseline;
+    padding: 4px 0;
+    font-size: 13px;
+    border-bottom: 1px solid rgba(239,234,247,0.05);
+  }
+  .rv-star { color: var(--amber); font-size: 11px; }
+  .rv-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rv-nfl { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--chalk-dim); }
+  .rv-val { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--amber); min-width: 28px; text-align: right; }
+  .rv-tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.05em;
+    padding: 1px 5px;
+    margin-left: 6px;
+    border-radius: 3px;
+    border: 1px solid var(--loss-red);
+    color: var(--loss-red);
+    vertical-align: middle;
+  }
+  .rv-tag-ir { border-color: var(--chalk-dim); color: var(--chalk-dim); }
 
   /* ---------- WEEKLY MATCHUPS ---------- */
   .matchup-layout {
@@ -704,6 +785,37 @@ const CHAMPIONS_LEAGUE1 = {
   2022: "Tim", 2023: "Logan", 2024: "Daniel", 2025: "Tim"
 };
 
+// BBL money: everyone pays the buy-in every season and the pot is
+// split by finish. 1st place is the champion; 2nd and 3rd come from
+// the playoff bracket. The Sleeper years (2022 onward) are read from
+// Sleeper's winners bracket automatically. The league spreadsheet only
+// kept the champion for earlier years, so 2nd/3rd for 2018-2021 can be
+// filled in here, e.g.  2020: { second: "Joey", third: "Morgan" }
+// Highest season points scored comes from the regular-season points
+// for each year (2020 onward; 2018-2019 weren't recorded).
+const PRIZES_LEAGUE1 = {
+  fee: 75,
+  teams: 12,
+  shares: { first: 0.60, second: 0.20, third: 0.10, highPoints: 0.10 },
+  podium: {
+    // 2018: { second: "", third: "" },
+    // 2019: { second: "", third: "" },
+    // 2020: { second: "", third: "" },
+    // 2021: { second: "", third: "" }
+  },
+  // Highest total points scored each season, from the spreadsheet's
+  // Total Points Scored table. Any season not listed here is worked
+  // out from the standings data instead.
+  topScorer: {
+    2020: { owner: "Adam",  points: 1753.40 },
+    2021: { owner: "Adam",  points: 1937.30 },
+    2022: { owner: "Tim",   points: 1790.82 },
+    2023: { owner: "Joey",  points: 1798.34 },
+    2024: { owner: "Kurt",  points: 1772.74 },
+    2025: { owner: "Adam",  points: 1793.14 }
+  }
+};
+
 // Cumulative career record for 2020-2025, straight from the league
 // spreadsheet's win/loss table. These six seasons overlap with what
 // Sleeper can also compute (2022-2025), so this is used as the
@@ -920,6 +1032,7 @@ const LEAGUES = {
     champions: CHAMPIONS_LEAGUE1,
     careerRecordOverride: CAREER_RECORD_OVERRIDE_LEAGUE1,
     overrideYears: [2020, 2021, 2022, 2023, 2024, 2025],
+    prizes: PRIZES_LEAGUE1,
     ownerAliases: OWNER_ALIASES_LEAGUE1,
     // Every member has been in this league since it started, so
     // "seasons" in Career Stats means full league tenure for everyone.
@@ -949,6 +1062,7 @@ const LEAGUES = {
     champions: CHAMPIONS_LEAGUE2,
     careerRecordOverride: {},
     overrideYears: [],
+    prizes: null,
     ownerAliases: OWNER_ALIASES_LEAGUE2,
     // This league has had real membership turnover (people have left
     // and joined over the years), so "seasons" should reflect each
@@ -994,6 +1108,7 @@ const state = {
   activeSeason: null,
   activeSubView: "standings",
   cache: {},           // season -> computed standings
+  podium: {},          // season -> { first, second, third } from Sleeper's winners bracket
   subCache: {}          // season -> { draft: [...], power: [...], playoff: {...} }
 };
 
@@ -2245,6 +2360,93 @@ async function renderPlayoffPicture(entry, forceRefresh) {
 /* =========================================================
    THIS WEEK'S MATCHUPS
    ========================================================= */
+/* =========================================================
+   ROSTERS -- every team's players, grouped by position
+   ========================================================= */
+async function renderRosterView(entry) {
+  const content = document.getElementById("content");
+  const season = entry.season;
+  state.subCache[season] = state.subCache[season] || {};
+
+  try {
+    if (!state.subCache[season].rosterView) {
+      const [users, rosters, valueResult] = await Promise.all([
+        getJSON(`${API}/league/${entry.leagueId}/users`),
+        getJSON(`${API}/league/${entry.leagueId}/rosters`),
+        buildLiveValueMap(entry, false)
+      ]);
+      if (!state.playersStatic) state.playersStatic = await getJSON(`${API}/players/nfl`);
+      const playersDb = state.playersStatic;
+      const userMap = {};
+      users.forEach(u => { userMap[u.user_id] = u; });
+
+      const teams = rosters.map(r => {
+        const u = userMap[r.owner_id] || {};
+        const s = r.settings || {};
+        const starters = new Set(r.starters || []);
+        const reserve = new Set(r.reserve || []);
+        const players = (r.players || []).map(pid => {
+          const p = playersDb[pid] || {};
+          const pos = p.position || "?";
+          const name = [p.first_name, p.last_name].filter(Boolean).join(" ") || "Unknown player";
+          const skill = ["QB", "RB", "WR", "TE"].includes(pos);
+          return {
+            name, pos, nfl: p.team || "FA",
+            value: skill ? valueFromMap(valueResult.map, name) : null,
+            starter: starters.has(pid),
+            ir: reserve.has(pid),
+            injury: p.injury_status || null
+          };
+        });
+        return {
+          owner: canonicalOwner(u.display_name || "Unknown"),
+          teamName: (u.metadata && u.metadata.team_name) || u.display_name || "Unknown Team",
+          wins: s.wins || 0, losses: s.losses || 0, ties: s.ties || 0,
+          pointsFor: (s.fpts || 0) + (s.fpts_decimal || 0) / 100,
+          players
+        };
+      }).sort((a, b) => (b.wins - a.wins) || (b.pointsFor - a.pointsFor));
+      state.subCache[season].rosterView = { teams, live: valueResult.live, weekUsed: valueResult.weekUsed };
+    }
+
+    const { teams, live, weekUsed } = state.subCache[season].rosterView;
+    if (!teams.length) {
+      content.innerHTML = `<div class="placeholder-box"><strong>No rosters yet</strong>Rosters for ${season} aren't set.</div>`;
+      return;
+    }
+
+    const order = ["QB", "RB", "WR", "TE", "K", "DEF"];
+    const cards = teams.map(t => {
+      const groups = {};
+      t.players.forEach(p => { (groups[order.includes(p.pos) ? p.pos : "Other"] = groups[order.includes(p.pos) ? p.pos : "Other"] || []).push(p); });
+      const sections = order.concat(["Other"]).filter(g => groups[g]).map(g => {
+        const list = groups[g].slice().sort((a, b) => ((b.value || 0) - (a.value || 0)) || a.name.localeCompare(b.name));
+        return `<div class="rv-pos">${g === "DEF" ? "Defense" : g === "K" ? "Kicker" : g}</div>` + list.map(p => `
+          <div class="rv-player">
+            <span class="rv-star">${p.starter ? "\u2605" : ""}</span>
+            <span class="rv-name">${escapeHTML(p.name)}${p.ir ? `<span class="rv-tag rv-tag-ir">IR</span>` : ""}${p.injury ? `<span class="rv-tag">${escapeHTML(p.injury.slice(0, 3).toUpperCase())}</span>` : ""}</span>
+            <span class="rv-nfl">${escapeHTML(p.nfl)}</span>
+            <span class="rv-val">${p.value != null ? p.value.toFixed(0) : ""}</span>
+          </div>`).join("");
+      }).join("");
+      return `
+        <details class="rv-card" open>
+          <summary>
+            <div><div class="rv-team">${escapeHTML(t.teamName)}</div><div class="rv-owner">${escapeHTML(t.owner)}</div></div>
+            <div class="rv-record">${t.wins}-${t.losses}${t.ties ? "-" + t.ties : ""}</div>
+          </summary>
+          <div class="rv-body">${sections}</div>
+        </details>`;
+    }).join("");
+
+    content.innerHTML = `
+      <p class="panel-note" style="margin-bottom:14px;display:block;">Every team's roster by position &middot; &#9733; = in the starting lineup &middot; number = player value (0&ndash;100, ${live ? `based on real production through Week ${weekUsed}` : "preseason rank, no games played yet"}). Click a team to collapse it.</p>
+      <div class="rv-grid">${cards}</div>`;
+  } catch (e) {
+    content.innerHTML = `<div class="placeholder-box"><strong>Couldn't load rosters</strong>Check your connection and try again.</div>`;
+  }
+}
+
 async function renderWeeklyMatchups(entry) {
   const content = document.getElementById("content");
   const season = entry.season;
@@ -2497,6 +2699,7 @@ function renderSeasonSubNav(entry) {
   const tabs = [
     { key: "standings", label: "Standings" },
     { key: "matchups", label: "This Week" },
+    { key: "rosters", label: "Rosters" },
     { key: "roster", label: "Roster Rankings" },
     { key: "power", label: "Power Rankings" },
     { key: "playoff", label: "Playoff Picture" }
@@ -2524,6 +2727,11 @@ async function selectSubView(entry, view) {
   if (view === "matchups") {
     content.innerHTML = `<div class="loading-row">Pulling this week's matchups&hellip;</div>`;
     await renderWeeklyMatchups(entry);
+    return;
+  }
+  if (view === "rosters") {
+    content.innerHTML = `<div class="loading-row">Loading rosters&hellip;</div>`;
+    await renderRosterView(entry);
     return;
   }
   if (view === "roster") {
@@ -2703,6 +2911,195 @@ function buildCareerAggregates() {
   return Object.values(byOwner);
 }
 
+/* =========================================================
+   PROFITS (BBL buy-in + prize payouts)
+   ========================================================= */
+// Reads 1st/2nd/3rd from Sleeper's playoff bracket for a finished
+// season. Returns null if the bracket can't be read, so the caller
+// just leaves 2nd/3rd blank instead of guessing.
+async function fetchBracketPodium(entry) {
+  if (state.podium[entry.season]) return state.podium[entry.season];
+  try {
+    const [bracket, users, rosters] = await Promise.all([
+      getJSON(`${API}/league/${entry.leagueId}/winners_bracket`),
+      getJSON(`${API}/league/${entry.leagueId}/users`),
+      getJSON(`${API}/league/${entry.leagueId}/rosters`)
+    ]);
+    if (!Array.isArray(bracket)) return null;
+    const finalGame = bracket.find(m => m.p === 1);
+    const thirdGame = bracket.find(m => m.p === 3);
+    if (!finalGame || finalGame.w == null || finalGame.l == null) return null;
+    const userMap = {};
+    users.forEach(u => { userMap[u.user_id] = u; });
+    const ownerOf = rid => {
+      const r = rosters.find(x => x.roster_id === rid);
+      const u = r && userMap[r.owner_id];
+      return u ? canonicalOwner(u.display_name) : null;
+    };
+    const podium = {
+      first: ownerOf(finalGame.w),
+      second: ownerOf(finalGame.l),
+      third: thirdGame && thirdGame.w != null ? ownerOf(thirdGame.w) : null
+    };
+    state.podium[entry.season] = podium;
+    return podium;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function resolvePodium(year) {
+  const manual = (CONFIG.prizes.podium && CONFIG.prizes.podium[year]) || {};
+  let second = manual.second || null;
+  let third = manual.third || null;
+  let conflict = null;
+  if (!(second && third)) {
+    const entry = state.seasons.find(s => s.season === year && s.source === "sleeper" && s.leagueId);
+    if (entry) {
+      const b = await fetchBracketPodium(entry);
+      // Only trust the bracket if its champion matches the champion
+      // already on record for that year.
+      if (b && b.first === CHAMPIONS[year]) {
+        second = second || b.second;
+        third = third || b.third;
+      } else if (b && b.first) {
+        conflict = b.first;
+      }
+    }
+  }
+  return { first: CHAMPIONS[year], second, third, conflict };
+}
+
+const fmtMoney = n => (n < 0 ? "-$" : "$") + Math.abs(Math.round(n)).toLocaleString("en-US");
+
+function computeProfits(careers, podiums) {
+  const P = CONFIG.prizes;
+  const years = Object.keys(CHAMPIONS).map(Number).sort((a, b) => a - b);
+  const pot = P.teams * P.fee;
+  const amt = {
+    first: pot * P.shares.first, second: pot * P.shares.second,
+    third: pot * P.shares.third, high: pot * P.shares.highPoints
+  };
+
+  const conflicts = [];
+  const seasonRows = years.map(y => {
+    let hi = null;
+    const fixed = P.topScorer && P.topScorer[y];
+    if (fixed) {
+      hi = { owner: fixed.owner, pts: fixed.points };
+    } else {
+      careers.forEach(c => c.seasons.forEach(s => {
+        if (s.season === y && s.pointsFor != null && (!hi || s.pointsFor > hi.pts)) hi = { owner: c.owner, pts: s.pointsFor };
+      }));
+    }
+    const pod = podiums[y] || {};
+    if (pod.conflict) conflicts.push({ year: y, listed: pod.first, bracket: pod.conflict });
+    return { year: y, first: pod.first || null, second: pod.second || null, third: pod.third || null, high: hi ? hi.owner : null, highPts: hi ? hi.pts : null };
+  });
+
+  const byOwner = {};
+  const ensure = o => (byOwner[o] = byOwner[o] || { owner: o, firsts: 0, seconds: 0, thirds: 0, highs: 0, winnings: 0, paidIn: 0, net: 0 });
+  careers.forEach(c => {
+    const o = ensure(c.owner);
+    o.paidIn = P.fee * (CONFIG.uniformTenure ? years.length : c.seasons.filter(s => years.includes(s.season)).length);
+  });
+
+  let unattributed = 0;
+  const missing = { podium: [], high: [] };
+  seasonRows.forEach(r => {
+    if (r.first) { const o = ensure(r.first); o.firsts++; o.winnings += amt.first; } else unattributed += amt.first;
+    if (r.second) { const o = ensure(r.second); o.seconds++; o.winnings += amt.second; } else { unattributed += amt.second; missing.podium.push(r.year); }
+    if (r.third) { const o = ensure(r.third); o.thirds++; o.winnings += amt.third; } else { unattributed += amt.third; if (!missing.podium.includes(r.year)) missing.podium.push(r.year); }
+    if (r.high) { const o = ensure(r.high); o.highs++; o.winnings += amt.high; } else { unattributed += amt.high; missing.high.push(r.year); }
+  });
+  Object.values(byOwner).forEach(o => { o.net = o.winnings - o.paidIn; });
+
+  return { pot, amt, years, seasonRows, owners: Object.values(byOwner), unattributed, missing, conflicts };
+}
+
+async function paintProfits(careers) {
+  const leagueKey = ACTIVE_LEAGUE_KEY;
+  const P = CONFIG.prizes;
+  const years = Object.keys(CHAMPIONS).map(Number);
+  const podiums = {};
+  await Promise.all(years.map(async y => { podiums[y] = await resolvePodium(y); }));
+
+  const summaryEl = document.getElementById("profitsSummary");
+  const tableEl = document.getElementById("profitsTable");
+  const seasonEl = document.getElementById("payoutsTable");
+  if (leagueKey !== ACTIVE_LEAGUE_KEY || !summaryEl || !tableEl || !seasonEl) return;
+
+  const d = computeProfits(careers, podiums);
+  const paidOut = d.pot * d.years.length - d.unattributed;
+  const list = a => a.join(", ");
+  const notes = [];
+  if (d.missing.podium.length) notes.push(`2nd/3rd place not on record for ${list(d.missing.podium)}`);
+  if (d.missing.high.length) notes.push(`top scorer not on record for ${list(d.missing.high)}`);
+
+  summaryEl.innerHTML = `
+    <div class="prize-summary">
+      ${fmtMoney(P.fee)} buy-in &times; ${P.teams} teams = <b>${fmtMoney(d.pot)}</b> pot each season &middot;
+      1st <b>${fmtMoney(d.amt.first)}</b> &middot; 2nd <b>${fmtMoney(d.amt.second)}</b> &middot;
+      3rd <b>${fmtMoney(d.amt.third)}</b> &middot; most points <b>${fmtMoney(d.amt.high)}</b><br>
+      ${d.years.length} seasons played: <b>${fmtMoney(d.pot * d.years.length)}</b> in, <b>${fmtMoney(paidOut)}</b> credited to winners below${d.unattributed ? `, <b>${fmtMoney(d.unattributed)}</b> not attributed (${escapeHTML(notes.join("; "))})` : ""}.
+      Net = winnings minus ${fmtMoney(P.fee)} &times; ${d.years.length} seasons.
+      ${d.conflicts.length ? `<br><b>Check:</b> Sleeper's bracket shows a different champion than the champions list for ${d.conflicts.map(c => `${c.year} (${escapeHTML(c.bracket)} vs ${escapeHTML(c.listed)})`).join(", ")}, so 2nd/3rd place aren't filled in for those years.` : ""}
+    </div>`;
+
+  paintSortableTable(
+    tableEl,
+    [
+      { key: "owner", label: "Owner" },
+      { key: "firsts", label: "1st", numeric: true },
+      { key: "seconds", label: "2nd", numeric: true },
+      { key: "thirds", label: "3rd", numeric: true },
+      { key: "highs", label: "Top Pts", numeric: true },
+      { key: "winnings", label: "Won", numeric: true },
+      { key: "paidIn", label: "Paid In", numeric: true },
+      { key: "net", label: "Net", numeric: true }
+    ],
+    d.owners,
+    (o, i) => `
+      <tr>
+        <td class="rank">${i + 1}</td>
+        <td class="team-name">${escapeHTML(o.owner)}</td>
+        <td class="num">${o.firsts || "—"}</td>
+        <td class="num">${o.seconds || "—"}</td>
+        <td class="num">${o.thirds || "—"}</td>
+        <td class="num">${o.highs || "—"}</td>
+        <td class="num">${fmtMoney(o.winnings)}</td>
+        <td class="num">${fmtMoney(o.paidIn)}</td>
+        <td class="num ${o.net >= 0 ? "money-pos" : "money-neg"}">${o.net > 0 ? "+" : ""}${fmtMoney(o.net)}</td>
+      </tr>`,
+    "net", "desc"
+  );
+
+  const cell = (name, money, extra) => name
+    ? `<td class="prize-cell">${escapeHTML(name)}<small>${fmtMoney(money)}${extra ? " · " + extra : ""}</small></td>`
+    : `<td class="prize-cell empty">—</td>`;
+  paintSortableTable(
+    seasonEl,
+    [
+      { key: "year", label: "Season", numeric: true },
+      { key: "first", label: "1st" },
+      { key: "second", label: "2nd" },
+      { key: "third", label: "3rd" },
+      { key: "high", label: "Most Points" }
+    ],
+    d.seasonRows,
+    (r) => `
+      <tr>
+        <td class="rank"></td>
+        <td class="num">${r.year}</td>
+        ${cell(r.first, d.amt.first)}
+        ${cell(r.second, d.amt.second)}
+        ${cell(r.third, d.amt.third)}
+        ${cell(r.high, d.amt.high, r.highPts != null ? r.highPts.toFixed(1) + " pts" : "")}
+      </tr>`,
+    "year", "desc"
+  );
+}
+
 function renderHistoryView() {
   return ensureAllSeasonsLoaded().then(() => {
     const careers = buildCareerAggregates();
@@ -2868,6 +3265,16 @@ function renderHistoryView() {
         <p class="hist-section-sub">Every title on record &mdash; who hoisted it, and when.</p>
         <div class="table-scroll" id="championshipsTable"></div>
       </div>
+
+      ${CONFIG.prizes ? `
+      <div class="hist-section">
+        <h2 class="hist-section-head">Profits</h2>
+        <p class="hist-section-sub">Buy-ins, payouts and net winnings by owner &mdash; click any column to sort.</p>
+        <div id="profitsSummary"><div class="loading-row">Tallying payouts&hellip;</div></div>
+        <div class="table-scroll" id="profitsTable"></div>
+        <h3 class="hist-subhead">Payouts by season</h3>
+        <div class="table-scroll" id="payoutsTable"></div>
+      </div>` : ""}
     `;
 
     paintSortableTable(
@@ -2949,6 +3356,8 @@ function renderHistoryView() {
         </tr>`,
       "titleCount", "desc"
     );
+
+    if (CONFIG.prizes) paintProfits(careers);
   });
 }
 
@@ -2974,6 +3383,7 @@ async function switchLeague(key) {
   state.activeSubView = "standings";
   state.cache = {};
   state.subCache = {};
+  state.podium = {};
   historyLoaded = false;
 
   // Reset the Season Standings / Historical Stats toggle back to
